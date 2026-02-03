@@ -1,0 +1,84 @@
+/* ============================================
+   VIBE DESIGN - Toolbar Styles
+   ============================================ */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E0E0E0;
+  padding: 0 16px;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-logo {
+  font-weight: 600;
+  font-size: 16px;
+  color: #1976D2;
+  user-select: none;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: #E0E0E0;
+  margin: 0 4px;
+}
+
+.tool-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #616161;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-button:hover:not(.disabled) {
+  background: #F5F5F5;
+  color: #212121;
+}
+
+.tool-button.active {
+  background: #E3F2FD;
+  color: #1976D2;
+}
+
+.tool-button.active:hover {
+  background: #BBDEFB;
+}
+
+.tool-button.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.zoom-display {
+  min-width: 50px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #616161;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.zoom-display:hover {
+  background: #F5F5F5;
+  color: #212121;
+}

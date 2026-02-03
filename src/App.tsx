@@ -1,35 +1,52 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// ============================================
+// VIBE DESIGN - Main App Component
+// ============================================
 
-function App() {
-  const [count, setCount] = useState(0)
+import React, { useState, useEffect } from 'react';
+
+import { DesignCanvas, Toolbar, LayerPanel, SuggestionPanel } from './components';
+import { useKeyboardShortcuts } from './hooks';
+
+import './App.css';
+
+const App: React.FC = () => {
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts();
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Calculate canvas dimensions (subtract panels and toolbar)
+  const canvasWidth = windowSize.width - 260 - 300; // Left panel + Right panel
+  const canvasHeight = windowSize.height - 48; // Toolbar height
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app">
+      <Toolbar />
+      <div className="app-content">
+        <LayerPanel />
+        <div className="canvas-container">
+          <DesignCanvas width={canvasWidth} height={canvasHeight} />
+        </div>
+        <SuggestionPanel />
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    </div>
+  );
+};
 
-export default App
+export default App;

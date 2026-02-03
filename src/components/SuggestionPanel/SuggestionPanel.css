@@ -1,0 +1,254 @@
+/* ============================================
+   VIBE DESIGN - Suggestion Panel Styles
+   ============================================ */
+
+.suggestion-panel {
+  width: 300px;
+  height: 100%;
+  background: #FFFFFF;
+  border-left: 1px solid #E0E0E0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.suggestion-panel.disabled {
+  opacity: 0.9;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border-bottom: 1px solid #E0E0E0;
+  font-weight: 600;
+  font-size: 14px;
+  color: #212121;
+}
+
+.panel-header svg {
+  color: #1976D2;
+}
+
+.suggestion-count {
+  background: #1976D2;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.suggestions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.suggestion-card {
+  background: #FAFAFA;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.suggestion-card:hover {
+  border-color: #90CAF9;
+  background: #F5F9FF;
+}
+
+.suggestion-card.active {
+  border-color: #1976D2;
+  background: #E3F2FD;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15);
+}
+
+.suggestion-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.suggestion-icon {
+  width: 28px;
+  height: 28px;
+  background: #E3F2FD;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1976D2;
+  flex-shrink: 0;
+}
+
+.suggestion-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.suggestion-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #212121;
+}
+
+.suggestion-confidence {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.suggestion-description {
+  font-size: 12px;
+  color: #616161;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+.suggestion-preview {
+  background: #FFFFFF;
+  border: 1px solid #E0E0E0;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+
+.preview-label {
+  font-size: 11px;
+  color: #9E9E9E;
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-btn.accept {
+  background: #4CAF50;
+  color: #FFFFFF;
+}
+
+.action-btn.accept:hover {
+  background: #43A047;
+}
+
+.action-btn.reject {
+  background: #F5F5F5;
+  color: #616161;
+  border: 1px solid #E0E0E0;
+}
+
+.action-btn.reject:hover {
+  background: #EEEEEE;
+  color: #424242;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: #9E9E9E;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  background: #F5F5F5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #616161;
+}
+
+.empty-hint {
+  font-size: 12px !important;
+  color: #9E9E9E !important;
+}
+
+.disabled-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.disabled-message p {
+  color: #9E9E9E;
+  margin: 0 0 16px 0;
+}
+
+.enable-btn {
+  background: #1976D2;
+  color: #FFFFFF;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.enable-btn:hover {
+  background: #1565C0;
+}
+
+.panel-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #E0E0E0;
+  background: #FAFAFA;
+}
+
+.keyboard-hints {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 11px;
+  color: #9E9E9E;
+}
+
+.keyboard-hints kbd {
+  background: #FFFFFF;
+  border: 1px solid #E0E0E0;
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-family: inherit;
+  font-size: 10px;
+  margin-right: 4px;
+}
