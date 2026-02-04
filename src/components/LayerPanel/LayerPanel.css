@@ -3,204 +3,204 @@
    ============================================ */
 
 .layer-panel {
-  width: 260px;
-  height: 100%;
-  background: #FFFFFF;
-  border-right: 1px solid #E0E0E0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+    width: 260px;
+    height: 100%;
+    background: #FFFFFF;
+    border-right: 1px solid #E0E0E0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .panel-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  border-bottom: 1px solid #E0E0E0;
-  font-weight: 600;
-  font-size: 14px;
-  color: #212121;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    border-bottom: 1px solid #E0E0E0;
+    font-weight: 600;
+    font-size: 14px;
+    color: #212121;
 }
 
 .panel-header svg {
-  color: #1976D2;
+    color: #1976D2;
 }
 
 .layer-count {
-  background: #E0E0E0;
-  color: #616161;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-  margin-left: auto;
+    background: #E0E0E0;
+    color: #616161;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: auto;
 }
 
 .layers-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 0;
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
 }
 
 .layer-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background 0.1s ease;
-  user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    user-select: none;
 }
 
 .layer-item:hover {
-  background: #F5F5F5;
+    background: #F5F5F5;
 }
 
 .layer-item.selected {
-  background: #E3F2FD;
+    background: #E3F2FD;
 }
 
 .layer-item.selected:hover {
-  background: #BBDEFB;
+    background: #BBDEFB;
 }
 
 .layer-item.hidden-layer {
-  opacity: 0.5;
+    opacity: 0.5;
 }
 
 .layer-expand {
-  width: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+    width: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 .expand-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border: none;
-  background: transparent;
-  color: #9E9E9E;
-  cursor: pointer;
-  padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: transparent;
+    color: #9E9E9E;
+    cursor: pointer;
+    padding: 0;
 }
 
 .expand-btn:hover {
-  color: #616161;
+    color: #616161;
 }
 
 .expand-spacer {
-  width: 16px;
+    width: 16px;
 }
 
 .layer-icon {
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #757575;
-  flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #757575;
+    flex-shrink: 0;
 }
 
 .layer-item.selected .layer-icon {
-  color: #1976D2;
+    color: #1976D2;
 }
 
 .layer-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .layer-name {
-  font-size: 12px;
-  color: #424242;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    font-size: 12px;
+    color: #424242;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .layer-item.selected .layer-name {
-  color: #1565C0;
-  font-weight: 500;
+    color: #1565C0;
+    font-weight: 500;
 }
 
 .layer-semantic {
-  font-size: 10px;
-  flex-shrink: 0;
+    font-size: 10px;
+    flex-shrink: 0;
 }
 
 .layer-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.1s ease;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.1s ease;
 }
 
 .layer-item:hover .layer-actions,
 .layer-item.selected .layer-actions {
-  opacity: 1;
+    opacity: 1;
 }
 
 .layer-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: #9E9E9E;
-  cursor: pointer;
-  padding: 0;
-  transition: all 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #9E9E9E;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.1s ease;
 }
 
 .layer-action-btn:hover {
-  background: #E0E0E0;
-  color: #616161;
+    background: #E0E0E0;
+    color: #616161;
 }
 
 .layer-action-btn.inactive {
-  color: #BDBDBD;
+    color: #BDBDBD;
 }
 
 .layer-action-btn.active {
-  color: #1976D2;
+    color: #1976D2;
 }
 
 .layer-action-btn.delete:hover {
-  background: #FFEBEE;
-  color: #E53935;
+    background: #FFEBEE;
+    color: #E53935;
 }
 
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
-  color: #9E9E9E;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    color: #9E9E9E;
 }
 
 .empty-state p {
-  margin: 0 0 4px 0;
-  font-size: 13px;
-  color: #757575;
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    color: #757575;
 }
 
 .empty-hint {
-  font-size: 11px;
-  color: #BDBDBD;
+    font-size: 11px;
+    color: #BDBDBD;
 }
