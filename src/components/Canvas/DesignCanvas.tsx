@@ -53,40 +53,85 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const setZoom = useCanvasStore((state) => state.setZoom);
     const setPan = useCanvasStore((state) => state.setPan);
 
-  // Suggestion store
-  const suggestionsEnabled = useSuggestionStore(
-    (state) => state.suggestionsEnabled
-  );
-  const ghostShapes = useSuggestionStore((state) => state.ghostShapes);
-  const activeSuggestion = useSuggestionStore((state) => state.activeSuggestion);
-  const setSuggestions = useSuggestionStore((state) => state.setSuggestions);
-  const acceptSuggestion = useSuggestionStore((state) => state.acceptSuggestion);    // Get shapes array for rendering
+    // Suggestion store
+    const suggestionsEnabled = useSuggestionStore(
+        (state) => state.suggestionsEnabled
+    );
+    const ghostShapes = useSuggestionStore((state) => state.ghostShapes);
+    const activeSuggestion = useSuggestionStore((state) => state.activeSuggestion);
+    const setSuggestions = useSuggestionStore((state) => state.setSuggestions);
+    const acceptSuggestion = useSuggestionStore((state) => state.acceptSuggestion);
+    const rejectSuggestion = useSuggestionStore((state) => state.rejectSuggestion);
+    const isPositionUsed = useSuggestionStore((state) => state.isPositionUsed);
+    const markPositionUsed = useSuggestionStore((state) => state.markPositionUsed);
+    const markPositionRejected = useSuggestionStore((state) => state.markPositionRejected);
+
+    // Get shapes array for rendering
     const shapesArray = useMemo(() => {
         return shapeOrder
             .map((id) => shapes.get(id))
             .filter(Boolean) as Shape[];
     }, [shapes, shapeOrder]);
 
-    // Debounced suggestion generation
+    // Generate suggestions (can be called with optional preview shape for real-time updates)
+    const generateSuggestionsWithPreview = useCallback(
+        (previewShapeData?: { type: 'rect' | 'circle'; x: number; y: number; width: number; height: number }) => {
+            if (!suggestionsEnabled) return;
+
+            const allShapes = Array.from(shapes.values());
+            const selectedShapeIds = Array.from(selectedIds);
+
+            // Include preview shape if drawing
+            if (previewShapeData && previewShapeData.width > 20 && previewShapeData.height > 20) {
+                const tempShape: Shape = {
+                    id: 'preview-temp',
+                    type: previewShapeData.type,
+                    x: previewShapeData.x,
+                    y: previewShapeData.y,
+                    width: previewShapeData.width,
+                    height: previewShapeData.height,
+                    rotation: 0,
+                    fill: '#E0E0E0',
+                    stroke: '#9E9E9E',
+                    strokeWidth: 1,
+                    opacity: 1,
+                    visible: true,
+                    locked: false,
+                    name: 'Preview',
+                    parentId: null,
+                    childIds: [],
+                    zIndex: allShapes.length,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+                allShapes.push(tempShape);
+            }
+
+            let suggestions = suggestionEngine.generateSuggestions({
+                allShapes,
+                selectedShapeIds,
+                recentActions: [],
+                canvasSize: { width: canvas.width, height: canvas.height },
+                zoomLevel: canvas.zoom,
+            });
+
+            // Filter out suggestions at used/rejected positions
+            suggestions = suggestions.map(suggestion => ({
+                ...suggestion,
+                shapes: suggestion.shapes.filter(shape => 
+                    !isPositionUsed(shape.x, shape.y, shape.width, shape.height)
+                )
+            })).filter(suggestion => suggestion.shapes.length > 0);
+
+            setSuggestions(suggestions);
+        },
+        [shapes, selectedIds, suggestionsEnabled, canvas, setSuggestions, isPositionUsed]
+    );
+
+    // Debounced version for when shapes change
     const generateSuggestions = useMemo(
-        () =>
-            debounce(() => {
-                if (!suggestionsEnabled) return;
-
-                const allShapes = Array.from(shapes.values());
-                const selectedShapeIds = Array.from(selectedIds);
-
-                const suggestions = suggestionEngine.generateSuggestions({
-                    allShapes,
-                    selectedShapeIds,
-                    recentActions: [],
-                    canvasSize: { width: canvas.width, height: canvas.height },
-                    zoomLevel: canvas.zoom,
-                });
-
-                setSuggestions(suggestions);
-            }, 300),
-        [shapes, selectedIds, suggestionsEnabled, canvas, setSuggestions]
+        () => debounce(() => generateSuggestionsWithPreview(), 300),
+        [generateSuggestionsWithPreview]
     );
 
     // Generate suggestions when shapes change
@@ -96,7 +141,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     }, [shapes, selectedIds, generateSuggestions]);
 
     // Handle clicking on a ghost shape to accept the suggestion
-    const handleGhostShapeClick = useCallback(
+    const handleGhostShapeAccept = useCallback(
         () => {
             if (!activeSuggestion) return;
 
@@ -104,8 +149,9 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             const shapesToAdd = acceptSuggestion(activeSuggestion.id);
             if (!shapesToAdd) return;
 
-            // Add all shapes from the suggestion to the canvas
+            // Mark positions as used and add shapes
             shapesToAdd.forEach((suggestedShape) => {
+                markPositionUsed(suggestedShape.x, suggestedShape.y, suggestedShape.width, suggestedShape.height);
                 const input: ShapeCreateInput = {
                     type: suggestedShape.type,
                     x: suggestedShape.x,
@@ -119,7 +165,23 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 addShape(input);
             });
         },
-        [activeSuggestion, acceptSuggestion, addShape]
+        [activeSuggestion, acceptSuggestion, addShape, markPositionUsed]
+    );
+
+    // Handle clicking on a ghost shape to reject the suggestion
+    const handleGhostShapeReject = useCallback(
+        () => {
+            if (!activeSuggestion) return;
+
+            // Mark all positions from this suggestion as rejected
+            activeSuggestion.shapes.forEach((shape) => {
+                markPositionRejected(shape.x, shape.y, shape.width, shape.height);
+            });
+
+            // Reject the suggestion
+            rejectSuggestion(activeSuggestion.id);
+        },
+        [activeSuggestion, rejectSuggestion, markPositionRejected]
     );
 
     // Get pointer position relative to canvas
@@ -189,16 +251,23 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 const width = Math.abs(pos.x - drawStartPoint.x);
                 const height = Math.abs(pos.y - drawStartPoint.y);
 
-                setPreviewShape({
+                const newPreviewShape = {
                     type: activeTool as 'rect' | 'circle',
                     x,
                     y,
                     width,
                     height,
-                });
+                };
+
+                setPreviewShape(newPreviewShape);
+
+                // Generate real-time suggestions based on what user is drawing
+                if (width > 30 && height > 30) {
+                    generateSuggestionsWithPreview(newPreviewShape);
+                }
             }
         },
-        [isDrawing, drawStartPoint, activeTool, getPointerPosition, setPreviewShape]
+        [isDrawing, drawStartPoint, activeTool, getPointerPosition, setPreviewShape, generateSuggestionsWithPreview]
     );
 
     // Handle mouse up
@@ -428,12 +497,13 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                     />
                 ))}
 
-                {/* Ghost shapes (suggestions) - clickable to accept */}
+                {/* Ghost shapes (suggestions) - clickable to accept/reject */}
                 {ghostShapes.map((shape, index) => (
-                    <GhostShapeRenderer 
-                        key={`ghost-${index}`} 
-                        shape={shape} 
-                        onClick={handleGhostShapeClick}
+                    <GhostShapeRenderer
+                        key={`ghost-${index}`}
+                        shape={shape}
+                        onAccept={handleGhostShapeAccept}
+                        onReject={handleGhostShapeReject}
                         isClickable={true}
                     />
                 ))}

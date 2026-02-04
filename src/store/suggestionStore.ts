@@ -5,6 +5,18 @@
 import { create } from 'zustand';
 import type { Suggestion, SuggestedShape } from '../types';
 
+// Position key for tracking used suggestion positions
+type PositionKey = string;
+
+const createPositionKey = (x: number, y: number, width: number, height: number): PositionKey => {
+    // Round to nearest 10px for fuzzy matching
+    const rx = Math.round(x / 10) * 10;
+    const ry = Math.round(y / 10) * 10;
+    const rw = Math.round(width / 10) * 10;
+    const rh = Math.round(height / 10) * 10;
+    return `${rx},${ry},${rw},${rh}`;
+};
+
 interface SuggestionStoreState {
     // Suggestions
     suggestions: Suggestion[];
@@ -17,6 +29,10 @@ interface SuggestionStoreState {
 
     // Ghost preview shapes
     ghostShapes: SuggestedShape[];
+
+    // Track used/rejected positions to avoid repeats
+    usedPositions: Set<PositionKey>;
+    rejectedPositions: Set<PositionKey>;
 
     // Actions
     setSuggestions: (suggestions: Suggestion[]) => void;
@@ -31,6 +47,12 @@ interface SuggestionStoreState {
     setGhostShapes: (shapes: SuggestedShape[]) => void;
     clearGhostShapes: () => void;
 
+    // Position tracking
+    isPositionUsed: (x: number, y: number, width: number, height: number) => boolean;
+    markPositionUsed: (x: number, y: number, width: number, height: number) => void;
+    markPositionRejected: (x: number, y: number, width: number, height: number) => void;
+    clearUsedPositions: () => void;
+
     // Settings
     setSuggestionsEnabled: (enabled: boolean) => void;
     setAutoShowSuggestions: (enabled: boolean) => void;
@@ -44,6 +66,8 @@ export const useSuggestionStore = create<SuggestionStoreState>((set, get) => ({
     autoShowSuggestions: true,
     suggestionDebounceMs: 300,
     ghostShapes: [],
+    usedPositions: new Set<PositionKey>(),
+    rejectedPositions: new Set<PositionKey>(),
 
     // Actions
     setSuggestions: (suggestions) => {
@@ -117,6 +141,33 @@ export const useSuggestionStore = create<SuggestionStoreState>((set, get) => ({
 
     setGhostShapes: (ghostShapes) => set({ ghostShapes }),
     clearGhostShapes: () => set({ ghostShapes: [] }),
+
+    // Position tracking
+    isPositionUsed: (x, y, width, height) => {
+        const key = createPositionKey(x, y, width, height);
+        const state = get();
+        return state.usedPositions.has(key) || state.rejectedPositions.has(key);
+    },
+
+    markPositionUsed: (x, y, width, height) => {
+        const key = createPositionKey(x, y, width, height);
+        set((state) => {
+            const newUsed = new Set(state.usedPositions);
+            newUsed.add(key);
+            return { usedPositions: newUsed };
+        });
+    },
+
+    markPositionRejected: (x, y, width, height) => {
+        const key = createPositionKey(x, y, width, height);
+        set((state) => {
+            const newRejected = new Set(state.rejectedPositions);
+            newRejected.add(key);
+            return { rejectedPositions: newRejected };
+        });
+    },
+
+    clearUsedPositions: () => set({ usedPositions: new Set(), rejectedPositions: new Set() }),
 
     // Settings
     setSuggestionsEnabled: (suggestionsEnabled) => {
