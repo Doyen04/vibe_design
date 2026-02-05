@@ -118,7 +118,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             // Filter out suggestions at used/rejected positions
             suggestions = suggestions.map(suggestion => ({
                 ...suggestion,
-                shapes: suggestion.shapes.filter(shape => 
+                shapes: suggestion.shapes.filter(shape =>
                     !isPositionUsed(shape.x, shape.y, shape.width, shape.height)
                 )
             })).filter(suggestion => suggestion.shapes.length > 0);

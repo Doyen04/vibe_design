@@ -3,7 +3,7 @@
 // Main toolbar with tools and actions
 // ============================================
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
     MousePointer2,
     Square,
@@ -17,9 +17,13 @@ import {
     Trash2,
     Download,
     Sparkles,
+    Bot,
+    Loader2,
+    X,
 } from 'lucide-react';
 
 import { useCanvasStore, useShapeStore, useSuggestionStore } from '../../store';
+import { initializeGemini } from '../../engine';
 import type { ToolType } from '../../types';
 
 import './Toolbar.css';
@@ -73,6 +77,15 @@ const Toolbar: React.FC = () => {
     const setSuggestionsEnabled = useSuggestionStore(
         (state) => state.setSuggestionsEnabled
     );
+    const llmEnabled = useSuggestionStore((state) => state.llmEnabled);
+    const setLlmEnabled = useSuggestionStore((state) => state.setLlmEnabled);
+    const llmApiKey = useSuggestionStore((state) => state.llmApiKey);
+    const setLlmApiKey = useSuggestionStore((state) => state.setLlmApiKey);
+    const llmLoading = useSuggestionStore((state) => state.llmLoading);
+
+    // Local state for API key modal
+    const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+    const [tempApiKey, setTempApiKey] = useState('');
 
     const handleToolChange = useCallback(
         (tool: ToolType) => {
@@ -97,6 +110,25 @@ const Toolbar: React.FC = () => {
         // Export functionality placeholder
         console.log('Export functionality coming soon!');
     }, []);
+
+    const handleLlmToggle = useCallback(() => {
+        if (!llmEnabled && !llmApiKey) {
+            // Show modal to enter API key
+            setShowApiKeyModal(true);
+        } else {
+            setLlmEnabled(!llmEnabled);
+        }
+    }, [llmEnabled, llmApiKey, setLlmEnabled]);
+
+    const handleApiKeySubmit = useCallback(() => {
+        if (tempApiKey.trim()) {
+            setLlmApiKey(tempApiKey.trim());
+            initializeGemini(tempApiKey.trim());
+            setLlmEnabled(true);
+            setShowApiKeyModal(false);
+            setTempApiKey('');
+        }
+    }, [tempApiKey, setLlmApiKey, setLlmEnabled]);
 
     return (
         <div className="toolbar">
@@ -162,9 +194,15 @@ const Toolbar: React.FC = () => {
                 />
                 <ToolButton
                     icon={<Sparkles size={18} />}
-                    label="AI Suggestions"
-                    active={suggestionsEnabled}
+                    label="AI Suggestions (Rule-based)"
+                    active={suggestionsEnabled && !llmEnabled}
                     onClick={() => setSuggestionsEnabled(!suggestionsEnabled)}
+                />
+                <ToolButton
+                    icon={llmLoading ? <Loader2 size={18} className="spinning" /> : <Bot size={18} />}
+                    label={llmEnabled ? "Gemini AI (Active)" : "Enable Gemini AI"}
+                    active={llmEnabled}
+                    onClick={handleLlmToggle}
                 />
             </div>
 

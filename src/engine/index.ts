@@ -6,3 +6,8 @@ export {
 } from './SuggestionEngine';
 export { SnapEngine, snapEngine } from './SnapEngine';
 export { HierarchyManager, hierarchyManager } from './HierarchyManager';
+export {
+    initializeGemini,
+    isGeminiInitialized,
+    generateGeminiSuggestions
+} from './GeminiSuggestionEngine';

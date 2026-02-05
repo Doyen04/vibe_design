@@ -27,6 +27,11 @@ interface SuggestionStoreState {
     autoShowSuggestions: boolean;
     suggestionDebounceMs: number;
 
+    // LLM mode settings
+    llmEnabled: boolean;
+    llmApiKey: string;
+    llmLoading: boolean;
+
     // Ghost preview shapes
     ghostShapes: SuggestedShape[];
 
@@ -47,6 +52,11 @@ interface SuggestionStoreState {
     setGhostShapes: (shapes: SuggestedShape[]) => void;
     clearGhostShapes: () => void;
 
+    // LLM settings
+    setLlmEnabled: (enabled: boolean) => void;
+    setLlmApiKey: (apiKey: string) => void;
+    setLlmLoading: (loading: boolean) => void;
+
     // Position tracking
     isPositionUsed: (x: number, y: number, width: number, height: number) => boolean;
     markPositionUsed: (x: number, y: number, width: number, height: number) => void;
@@ -65,6 +75,9 @@ export const useSuggestionStore = create<SuggestionStoreState>((set, get) => ({
     suggestionsEnabled: true,
     autoShowSuggestions: true,
     suggestionDebounceMs: 300,
+    llmEnabled: false,
+    llmApiKey: '',
+    llmLoading: false,
     ghostShapes: [],
     usedPositions: new Set<PositionKey>(),
     rejectedPositions: new Set<PositionKey>(),
@@ -168,6 +181,11 @@ export const useSuggestionStore = create<SuggestionStoreState>((set, get) => ({
     },
 
     clearUsedPositions: () => set({ usedPositions: new Set(), rejectedPositions: new Set() }),
+
+    // LLM settings
+    setLlmEnabled: (llmEnabled) => set({ llmEnabled }),
+    setLlmApiKey: (llmApiKey) => set({ llmApiKey }),
+    setLlmLoading: (llmLoading) => set({ llmLoading }),
 
     // Settings
     setSuggestionsEnabled: (suggestionsEnabled) => {
