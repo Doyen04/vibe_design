@@ -17,6 +17,9 @@ import { v4 as uuidv4 } from 'uuid';
 // TPD: 1,000,000 tokens per day
 // ============================================
 
+// API Key - stored directly in code
+const GEMINI_API_KEY = 'AIzaSyC6j--aZzW5E5duqnIkwXEQoajwBZpu3BU'; // Replace with your actual API key
+
 export interface RateLimitStatus {
     canMakeRequest: boolean;
     rpm: { used: number; limit: number; resetsIn: number };
@@ -34,9 +37,11 @@ const RATE_LIMITS = {
     TPD: 1000000,   // Tokens per day
 };
 
-// Gemini client instance
+// Gemini client instance (auto-initialized with hardcoded key)
 let geminiClient: GoogleGenAI | null = null;
-let apiKey: string | null = null;
+
+// User's design intent/description
+let userDesignIntent: string = '';
 
 // Rate limiting state
 let minuteRequestCount = 0;
@@ -46,11 +51,33 @@ let dayTokenCount = 0;
 let minuteResetTime = 0;
 let dayResetTime = 0;
 
-// Initialize Gemini client
-export const initializeGemini = (key: string): void => {
-    apiKey = key;
-    geminiClient = new GoogleGenAI({ apiKey: key });
-    resetRateLimits();
+// Auto-initialize Gemini client with hardcoded key
+const autoInitialize = (): void => {
+    if (!geminiClient && GEMINI_API_KEY && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE') {
+        geminiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        resetRateLimits();
+        console.log('[Gemini] Auto-initialized with hardcoded API key');
+    }
+};
+
+// Initialize Gemini client (kept for backwards compatibility)
+export const initializeGemini = (key?: string): void => {
+    const keyToUse = key || GEMINI_API_KEY;
+    if (keyToUse && keyToUse !== 'YOUR_GEMINI_API_KEY_HERE') {
+        geminiClient = new GoogleGenAI({ apiKey: keyToUse });
+        resetRateLimits();
+    }
+};
+
+// Set user's design intent
+export const setDesignIntent = (intent: string): void => {
+    userDesignIntent = intent;
+    console.log('[Gemini] Design intent set:', intent);
+};
+
+// Get current design intent
+export const getDesignIntent = (): string => {
+    return userDesignIntent;
 };
 
 // Reset rate limits
@@ -66,7 +93,17 @@ const resetRateLimits = (): void => {
 
 // Check if Gemini is initialized
 export const isGeminiInitialized = (): boolean => {
-    return geminiClient !== null && apiKey !== null;
+    autoInitialize(); // Try to auto-initialize if not done
+
+    if (!geminiClient) {
+        if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
+            console.error('[Gemini] API key not configured! Please set GEMINI_API_KEY in GeminiSuggestionEngine.ts');
+        } else {
+            console.error('[Gemini] Client failed to initialize');
+        }
+        return false;
+    }
+    return true;
 };
 
 // Get rate limit status
@@ -158,15 +195,20 @@ const buildPrompt = (shapes: Shape[], canvasWidth: number, canvasHeight: number)
         ? shapes.map(s => `- ${s.type} "${s.name}" at (${Math.round(s.x)}, ${Math.round(s.y)}) size ${Math.round(s.width)}x${Math.round(s.height)}`).join('\n')
         : 'Empty canvas - suggest initial UI elements';
 
-    return `You are a UI design assistant. Analyze the current canvas and suggest 1-2 complementary shapes that would improve the design.
+    // Include user's design intent if available
+    const designContext = userDesignIntent
+        ? `\nUser's Design Goal: "${userDesignIntent}"\nPlease suggest shapes that help achieve this design goal.\n`
+        : '';
 
+    return `You are a UI design assistant. Analyze the current canvas and suggest 1-2 complementary shapes that would improve the design.
+${designContext}
 Canvas dimensions: ${canvasWidth}x${canvasHeight}
 
 Current shapes:
 ${shapeDescriptions}
 
 Guidelines:
-- Suggest shapes that complement the existing layout
+- Suggest shapes that complement the existing layout${userDesignIntent ? ` and help build: ${userDesignIntent}` : ''}
 - Avoid overlapping with existing shapes
 - Keep shapes within canvas bounds (0 to ${canvasWidth} for x, 0 to ${canvasHeight} for y)
 - Use pleasant, accessible colors
@@ -362,4 +404,6 @@ export default {
     validateApiKey,
     generateGeminiSuggestions,
     getRateLimitStatus,
+    setDesignIntent,
+    getDesignIntent,
 };

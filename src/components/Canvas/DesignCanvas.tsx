@@ -136,6 +136,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                         }
                     } else {
                         // Fallback to heuristic engine
+                        console.warn('[Gemini] Not initialized, falling back to heuristic engine');
                         suggestions = suggestionEngine.generateSuggestions(
                             allShapes,
                             selectedShapeIds,

@@ -1,0 +1,159 @@
+/* ============================================
+   VIBE DESIGN - Design Intent Modal Styles
+   ============================================ */
+
+.design-intent-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.design-intent-modal {
+    background: #1e1e1e;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 520px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid #333;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.design-intent-modal-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.design-intent-modal-header h2 {
+    color: #fff;
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+}
+
+.design-intent-modal-header p {
+    color: #888;
+    font-size: 14px;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.design-intent-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.design-intent-modal-form textarea {
+    width: 100%;
+    padding: 14px 16px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.design-intent-modal-form textarea:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+}
+
+.design-intent-modal-form textarea::placeholder {
+    color: #666;
+}
+
+.design-intent-modal-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.design-intent-modal-examples span {
+    color: #666;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.design-intent-modal-examples button {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: #aaa;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.design-intent-modal-examples button:hover {
+    background: #333;
+    border-color: #4CAF50;
+    color: #4CAF50;
+}
+
+.design-intent-modal-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.design-intent-modal-actions button {
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.skip-button {
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+}
+
+.skip-button:hover {
+    background: #2a2a2a;
+    color: #fff;
+}
+
+.start-button {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border: none;
+    color: #fff;
+    flex: 1;
+}
+
+.start-button:hover {
+    background: linear-gradient(135deg, #5cbf60, #4CAF50);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}

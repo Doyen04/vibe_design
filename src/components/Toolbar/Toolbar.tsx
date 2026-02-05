@@ -3,7 +3,7 @@
 // Main toolbar with tools and actions
 // ============================================
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
     MousePointer2,
     Square,
@@ -19,11 +19,10 @@ import {
     Sparkles,
     Bot,
     Loader2,
-    X,
 } from 'lucide-react';
 
 import { useCanvasStore, useShapeStore, useSuggestionStore } from '../../store';
-import { initializeGemini, validateApiKey } from '../../engine';
+import { initializeGemini } from '../../engine';
 import type { ToolType } from '../../types';
 
 import './Toolbar.css';
@@ -79,17 +78,7 @@ const Toolbar: React.FC = () => {
     );
     const llmEnabled = useSuggestionStore((state) => state.llmEnabled);
     const setLlmEnabled = useSuggestionStore((state) => state.setLlmEnabled);
-    const llmApiKey = useSuggestionStore((state) => state.llmApiKey);
-    const setLlmApiKey = useSuggestionStore((state) => state.setLlmApiKey);
     const llmLoading = useSuggestionStore((state) => state.llmLoading);
-    const llmError = useSuggestionStore((state) => state.llmError);
-    const setLlmError = useSuggestionStore((state) => state.setLlmError);
-    const clearLlmError = useSuggestionStore((state) => state.clearLlmError);
-
-    // Local state for API key modal
-    const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-    const [tempApiKey, setTempApiKey] = useState('');
-    const [validating, setValidating] = useState(false);
 
     const handleToolChange = useCallback(
         (tool: ToolType) => {
@@ -116,38 +105,12 @@ const Toolbar: React.FC = () => {
     }, []);
 
     const handleLlmToggle = useCallback(() => {
-        if (!llmEnabled && !llmApiKey) {
-            // Show modal to enter API key
-            setShowApiKeyModal(true);
-        } else {
-            setLlmEnabled(!llmEnabled);
+        if (!llmEnabled) {
+            // Initialize Gemini with hardcoded API key and enable
+            initializeGemini();
         }
-    }, [llmEnabled, llmApiKey, setLlmEnabled]);
-
-    const handleApiKeySubmit = useCallback(async () => {
-        if (tempApiKey.trim()) {
-            setValidating(true);
-            clearLlmError();
-
-            try {
-                const result = await validateApiKey(tempApiKey.trim());
-
-                if (result.valid) {
-                    setLlmApiKey(tempApiKey.trim());
-                    initializeGemini(tempApiKey.trim());
-                    setLlmEnabled(true);
-                    setShowApiKeyModal(false);
-                    setTempApiKey('');
-                } else {
-                    setLlmError(result.error || 'Failed to validate API key');
-                }
-            } catch (error) {
-                setLlmError(error instanceof Error ? error.message : 'Unknown error occurred');
-            } finally {
-                setValidating(false);
-            }
-        }
-    }, [tempApiKey, setLlmApiKey, setLlmEnabled, setLlmError, clearLlmError]);
+        setLlmEnabled(!llmEnabled);
+    }, [llmEnabled, setLlmEnabled]);
 
     return (
         <div className="toolbar">
@@ -257,78 +220,6 @@ const Toolbar: React.FC = () => {
                     onClick={handleExport}
                 />
             </div>
-
-            {/* API Key Modal */}
-            {showApiKeyModal && (
-                <div className="api-key-modal-overlay" onClick={() => !validating && setShowApiKeyModal(false)}>
-                    <div className="api-key-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="api-key-modal-header">
-                            <h3>🤖 Enable Gemini AI</h3>
-                            <button
-                                className="modal-close-btn"
-                                onClick={() => setShowApiKeyModal(false)}
-                                disabled={validating}
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <p className="api-key-modal-description">
-                            Enter your Google Gemini API key to enable AI-powered design suggestions.
-                            Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
-                        </p>
-
-                        <div className="form-group">
-                            <label className="form-label">API Key</label>
-                            <input
-                                type="password"
-                                className={`api-key-input ${llmError ? 'input-error' : ''}`}
-                                placeholder="Enter your Gemini API key..."
-                                value={tempApiKey}
-                                onChange={(e) => {
-                                    setTempApiKey(e.target.value);
-                                    if (llmError) clearLlmError();
-                                }}
-                                onKeyDown={(e) => e.key === 'Enter' && !validating && handleApiKeySubmit()}
-                                disabled={validating}
-                            />
-                            <p className="form-hint">Using Gemini 2.5 Flash (10 RPM, 1500 RPD)</p>
-                        </div>
-
-                        {llmError && (
-                            <div className="api-key-error">
-                                ⚠️ {llmError}
-                            </div>
-                        )}
-                        <div className="api-key-modal-actions">
-                            <button
-                                className="cancel-btn"
-                                onClick={() => {
-                                    setShowApiKeyModal(false);
-                                    clearLlmError();
-                                    setTempApiKey('');
-                                }}
-                                disabled={validating}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="submit-btn"
-                                onClick={handleApiKeySubmit}
-                                disabled={!tempApiKey.trim() || validating}
-                            >
-                                {validating ? (
-                                    <>
-                                        <Loader2 size={16} className="spin" />
-                                        Validating...
-                                    </>
-                                ) : (
-                                    'Enable Gemini AI'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

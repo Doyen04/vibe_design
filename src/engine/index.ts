@@ -11,5 +11,7 @@ export {
     validateApiKey,
     generateGeminiSuggestions,
     getRateLimitStatus,
+    setDesignIntent,
+    getDesignIntent,
 } from './GeminiSuggestionEngine';
 export type { RateLimitStatus } from './GeminiSuggestionEngine';

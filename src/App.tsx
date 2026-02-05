@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-import { DesignCanvas, Toolbar, LayerPanel, SuggestionPanel } from './components';
+import { DesignCanvas, Toolbar, LayerPanel, SuggestionPanel, DesignIntentModal } from './components';
 import { useKeyboardShortcuts } from './hooks';
 
 import './App.css';
@@ -14,6 +14,9 @@ const App: React.FC = () => {
     width: window.innerWidth,
     height: window.innerHeight,
   });
+
+  // Show design intent modal on first load
+  const [showDesignModal, setShowDesignModal] = useState(true);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts();
@@ -37,6 +40,10 @@ const App: React.FC = () => {
 
   return (
     <div className="app">
+      <DesignIntentModal
+        isOpen={showDesignModal}
+        onClose={() => setShowDesignModal(false)}
+      />
       <Toolbar />
       <div className="app-content">
         <LayerPanel />
