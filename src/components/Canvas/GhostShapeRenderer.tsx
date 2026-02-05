@@ -45,13 +45,20 @@ const GhostShapeRenderer: React.FC<GhostShapeRendererProps> = memo(({
         listening: isClickable,
     };
 
-    return (
-        <Group
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
-            {/* Shape preview */}
-            {shape.type === 'rect' ? (
+    // Frame-specific props (transparent fill, dashed border)
+    const frameProps = {
+        fill: 'transparent',
+        stroke: isHovered ? '#616161' : '#9E9E9E',
+        strokeWidth: isHovered ? 2 : 1,
+        opacity: isHovered ? hoverOpacity : baseOpacity,
+        dash: [6, 3],
+        listening: isClickable,
+    };
+
+    // Render the appropriate shape based on type
+    const renderShape = () => {
+        if (shape.type === 'rect') {
+            return (
                 <Rect
                     {...commonProps}
                     x={shape.x}
@@ -60,14 +67,38 @@ const GhostShapeRenderer: React.FC<GhostShapeRendererProps> = memo(({
                     height={shape.height}
                     cornerRadius={4}
                 />
-            ) : (
+            );
+        } else if (shape.type === 'frame') {
+            return (
+                <Rect
+                    {...frameProps}
+                    x={shape.x}
+                    y={shape.y}
+                    width={shape.width}
+                    height={shape.height}
+                    cornerRadius={0}
+                />
+            );
+        } else {
+            // circle
+            return (
                 <Circle
                     {...commonProps}
                     x={centerX}
                     y={centerY}
                     radius={Math.min(shape.width, shape.height) / 2}
                 />
-            )}
+            );
+        }
+    };
+
+    return (
+        <Group
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            {/* Shape preview */}
+            {renderShape()}
 
             {/* Accept and Reject buttons when hovered */}
             {isHovered && isClickable && (

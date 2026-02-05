@@ -96,15 +96,23 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
 
         if (!shape.visible) return null;
 
+        // Frame-specific styling (dashed border, transparent fill)
+        const frameProps = shape.type === 'frame' ? {
+            dash: [8, 4],
+            fill: 'transparent',
+            strokeWidth: isSelected ? 2 : 1,
+        } : {};
+
         return (
             <Group>
-                {shape.type === 'rect' ? (
+                {shape.type === 'rect' || shape.type === 'frame' ? (
                     <Rect
                         ref={shapeRef as React.RefObject<Konva.Rect>}
                         {...commonProps}
+                        {...frameProps}
                         width={shape.width}
                         height={shape.height}
-                        cornerRadius={4}
+                        cornerRadius={shape.type === 'frame' ? 0 : 4}
                     />
                 ) : (
                     <Circle

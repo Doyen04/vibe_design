@@ -61,6 +61,7 @@ interface ShapeState {
 const DEFAULT_SHAPE_COLORS = {
     rect: { fill: '#E3F2FD', stroke: '#2196F3' },
     circle: { fill: '#FCE4EC', stroke: '#E91E63' },
+    frame: { fill: 'transparent', stroke: '#9E9E9E' },
 };
 
 const createDefaultShape = (input: ShapeCreateInput): Shape => {
@@ -77,10 +78,10 @@ const createDefaultShape = (input: ShapeCreateInput): Shape => {
         children: [],
         zIndex: 0,
         label: input.label ?? 'unknown',
-        name: input.name ?? `${input.type}-${Date.now()}`,
+        name: input.name ?? `${input.type === 'frame' ? 'Frame' : input.type}-${Date.now()}`,
         fill: input.fill ?? colors.fill,
         stroke: input.stroke ?? colors.stroke,
-        strokeWidth: 2,
+        strokeWidth: input.type === 'frame' ? 1 : 2,
         opacity: 1,
         rotation: 0,
         visible: true,

@@ -3,7 +3,8 @@
 // ============================================
 
 // Shape Types
-export type ShapeType = 'rect' | 'circle';
+// Note: Only 'frame' can nest other shapes. 'rect' and 'circle' cannot contain children.
+export type ShapeType = 'rect' | 'circle' | 'frame';
 
 // Semantic labels for shapes (AI-detected meanings)
 export type SemanticLabel =
@@ -199,7 +200,7 @@ export interface AnalysisContext {
 // Canvas & Interaction Types
 // ============================================
 
-export type ToolType = 'select' | 'rect' | 'circle' | 'pan' | 'zoom';
+export type ToolType = 'select' | 'rect' | 'circle' | 'frame' | 'pan' | 'zoom';
 
 export interface CanvasState {
     zoom: number;

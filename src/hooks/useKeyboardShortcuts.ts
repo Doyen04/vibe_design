@@ -89,6 +89,9 @@ export const useKeyboardShortcuts = () => {
                     case 'c':
                         setActiveTool('circle');
                         break;
+                    case 'f':
+                        setActiveTool('frame');
+                        break;
                     case 'h':
                         setActiveTool('pan');
                         break;

@@ -274,12 +274,12 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 return;
             }
 
-            // Start drawing with rect or circle tool
-            if (activeTool === 'rect' || activeTool === 'circle') {
+            // Start drawing with rect, circle, or frame tool
+            if (activeTool === 'rect' || activeTool === 'circle' || activeTool === 'frame') {
                 setIsDrawing(true);
                 setDrawStartPoint(pos);
                 setPreviewShape({
-                    type: activeTool,
+                    type: activeTool as 'rect' | 'circle' | 'frame',
                     x: pos.x,
                     y: pos.y,
                     width: 0,
@@ -316,7 +316,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 const height = Math.abs(pos.y - drawStartPoint.y);
 
                 setPreviewShape({
-                    type: activeTool as 'rect' | 'circle',
+                    type: activeTool as 'rect' | 'circle' | 'frame',
                     x,
                     y,
                     width,

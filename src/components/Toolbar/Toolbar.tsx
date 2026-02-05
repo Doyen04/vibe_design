@@ -19,6 +19,7 @@ import {
     Sparkles,
     Bot,
     Loader2,
+    Frame,
 } from 'lucide-react';
 
 import { useCanvasStore, useShapeStore, useSuggestionStore } from '../../store';
@@ -138,6 +139,12 @@ const Toolbar: React.FC = () => {
                     label="Circle (C)"
                     active={activeTool === 'circle'}
                     onClick={() => handleToolChange('circle')}
+                />
+                <ToolButton
+                    icon={<Frame size={18} />}
+                    label="Frame (F) - Container for grouping"
+                    active={activeTool === 'frame'}
+                    onClick={() => handleToolChange('frame')}
                 />
                 <ToolButton
                     icon={<Hand size={18} />}

@@ -90,6 +90,7 @@ export class HierarchyManager {
 
     /**
      * Check if a shape can be nested inside another
+     * Only frames can contain other shapes - rect and circle cannot nest
      */
     canNest(
         childId: string,
@@ -103,6 +104,9 @@ export class HierarchyManager {
         const parent = shapes.get(parentId);
 
         if (!child || !parent) return false;
+
+        // Only frames can contain other shapes
+        if (parent.type !== 'frame') return false;
 
         // Can't nest if child is an ancestor of parent (would create cycle)
         const parentAncestors = this.getAncestors(parentId, shapes);
@@ -124,6 +128,7 @@ export class HierarchyManager {
 
     /**
      * Find the best parent for a shape based on its position
+     * Only frames can be parents - rect and circle cannot contain children
      */
     findBestParent(
         shape: Shape,
@@ -135,6 +140,9 @@ export class HierarchyManager {
 
         for (const [id, candidate] of shapes) {
             if (id === shape.id || excludeIds.has(id)) continue;
+
+            // Only frames can be parents
+            if (candidate.type !== 'frame') continue;
 
             // Check if shape is inside candidate
             const shapeRight = shape.x + shape.width;

@@ -242,14 +242,18 @@ export class SnapEngine {
 
     /**
      * Find potential parent shape for nesting
+     * Only frames can be parents - rect and circle cannot contain children
      */
     findPotentialParent(
         shape: Shape,
         allShapes: Shape[]
     ): Shape | null {
-        // Find shapes that could contain this shape
+        // Find frames that could contain this shape
         const potentialParents = allShapes.filter((s) => {
             if (s.id === shape.id) return false;
+
+            // Only frames can be parents
+            if (s.type !== 'frame') return false;
 
             // Check if shape is inside this potential parent
             return (
@@ -262,7 +266,7 @@ export class SnapEngine {
 
         if (potentialParents.length === 0) return null;
 
-        // Return the smallest containing shape (most specific parent)
+        // Return the smallest containing frame (most specific parent)
         return potentialParents.reduce((smallest, current) => {
             const smallestArea = smallest.width * smallest.height;
             const currentArea = current.width * current.height;

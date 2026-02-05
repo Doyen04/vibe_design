@@ -17,8 +17,9 @@ import { v4 as uuidv4 } from 'uuid';
 // TPD: 1,000,000 tokens per day
 // ============================================
 
-// API Key - stored directly in code
-const GEMINI_API_KEY = 'AIzaSyC6j--aZzW5E5duqnIkwXEQoajwBZpu3BU'; // Replace with your actual API key
+// API Key - loaded from environment variable (.env file)
+// In Vite, environment variables must be prefixed with VITE_
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 export interface RateLimitStatus {
     canMakeRequest: boolean;
@@ -53,7 +54,7 @@ let dayResetTime = 0;
 
 // Auto-initialize Gemini client with hardcoded key
 const autoInitialize = (): void => {
-    if (!geminiClient && GEMINI_API_KEY && GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE') {
+    if (!geminiClient && GEMINI_API_KEY) {
         geminiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
         resetRateLimits();
         console.log('[Gemini] Auto-initialized with hardcoded API key');
@@ -63,7 +64,7 @@ const autoInitialize = (): void => {
 // Initialize Gemini client (kept for backwards compatibility)
 export const initializeGemini = (key?: string): void => {
     const keyToUse = key || GEMINI_API_KEY;
-    if (keyToUse && keyToUse !== 'YOUR_GEMINI_API_KEY_HERE') {
+    if (keyToUse) {
         geminiClient = new GoogleGenAI({ apiKey: keyToUse });
         resetRateLimits();
     }
@@ -96,7 +97,7 @@ export const isGeminiInitialized = (): boolean => {
     autoInitialize(); // Try to auto-initialize if not done
 
     if (!geminiClient) {
-        if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
+        if (!GEMINI_API_KEY) {
             console.error('[Gemini] API key not configured! Please set GEMINI_API_KEY in GeminiSuggestionEngine.ts');
         } else {
             console.error('[Gemini] Client failed to initialize');
@@ -240,8 +241,8 @@ const suggestionSchema = {
                             properties: {
                                 type: {
                                     type: Type.STRING,
-                                    enum: ['rect', 'circle'],
-                                    description: 'Shape type',
+                                    enum: ['rect', 'circle', 'frame'],
+                                    description: 'Shape type - use frame for containers/groups that hold other elements',
                                 },
                                 x: {
                                     type: Type.NUMBER,
@@ -261,7 +262,7 @@ const suggestionSchema = {
                                 },
                                 fill: {
                                     type: Type.STRING,
-                                    description: 'Fill color in hex format (e.g., #E8F5E9)',
+                                    description: 'Fill color in hex format (e.g., #E8F5E9). Use transparent for frames.',
                                 },
                                 stroke: {
                                     type: Type.STRING,
@@ -285,7 +286,7 @@ interface GeminiStructuredResponse {
         title: string;
         description: string;
         shapes: Array<{
-            type: 'rect' | 'circle';
+            type: 'rect' | 'circle' | 'frame';
             x: number;
             y: number;
             width: number;
@@ -359,7 +360,7 @@ export const generateGeminiSuggestions = async (
             priority: 80 - i * 10,
             shapes: s.shapes
                 .filter(shape =>
-                    (shape.type === 'rect' || shape.type === 'circle') &&
+                    (shape.type === 'rect' || shape.type === 'circle' || shape.type === 'frame') &&
                     shape.x >= 0 && shape.y >= 0 &&
                     shape.width > 0 && shape.height > 0
                 )
@@ -371,8 +372,8 @@ export const generateGeminiSuggestions = async (
                     height: shape.height,
                     label: 'unknown' as SemanticLabel,
                     parentId: null,
-                    fill: shape.fill || '#E8F5E9',
-                    stroke: shape.stroke || '#4CAF50',
+                    fill: shape.fill || (shape.type === 'frame' ? 'transparent' : '#E8F5E9'),
+                    stroke: shape.stroke || (shape.type === 'frame' ? '#9E9E9E' : '#4CAF50'),
                     isGhost: true,
                 })),
             context: {

@@ -47,7 +47,7 @@ interface CanvasStoreState {
 
     // Preview shape (while drawing)
     previewShape: {
-        type: 'rect' | 'circle';
+        type: 'rect' | 'circle' | 'frame';
         x: number;
         y: number;
         width: number;
