@@ -1,6 +1,6 @@
 // ============================================
 // VIBE DESIGN - Gemini AI Suggestion Engine
-// LLM-powered suggestions using Google Gemini 3
+// LLM-powered suggestions using Google Gemini 2.5
 // ============================================
 
 import { GoogleGenAI } from '@google/genai';
@@ -36,23 +36,75 @@ interface CanvasContext {
     selectedShapeIds: string[];
 }
 
-// Interface for Gemini suggestion response
-interface GeminiSuggestionResponse {
-    suggestions: Array<{
-        title: string;
-        description: string;
-        shapes: Array<{
-            type: 'rect' | 'circle';
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-            label: string;
-            fill?: string;
-            stroke?: string;
-        }>;
-    }>;
-}
+// JSON Schema for structured output
+const suggestionResponseSchema = {
+    type: 'object',
+    properties: {
+        suggestions: {
+            type: 'array',
+            description: 'List of design suggestions',
+            items: {
+                type: 'object',
+                properties: {
+                    title: {
+                        type: 'string',
+                        description: 'Short title for the suggestion'
+                    },
+                    description: {
+                        type: 'string',
+                        description: 'Brief explanation of why this helps the design'
+                    },
+                    shapes: {
+                        type: 'array',
+                        description: 'Shapes to add for this suggestion',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                type: {
+                                    type: 'string',
+                                    enum: ['rect', 'circle'],
+                                    description: 'Shape type'
+                                },
+                                x: {
+                                    type: 'number',
+                                    description: 'X position'
+                                },
+                                y: {
+                                    type: 'number',
+                                    description: 'Y position'
+                                },
+                                width: {
+                                    type: 'number',
+                                    description: 'Width of the shape'
+                                },
+                                height: {
+                                    type: 'number',
+                                    description: 'Height of the shape'
+                                },
+                                label: {
+                                    type: 'string',
+                                    enum: ['header', 'card', 'button', 'avatar', 'icon', 'container', 'sidebar', 'content', 'nav', 'footer', 'unknown'],
+                                    description: 'Semantic label for the shape'
+                                },
+                                fill: {
+                                    type: 'string',
+                                    description: 'Fill color in hex format'
+                                },
+                                stroke: {
+                                    type: 'string',
+                                    description: 'Stroke color in hex format'
+                                }
+                            },
+                            required: ['type', 'x', 'y', 'width', 'height', 'label']
+                        }
+                    }
+                },
+                required: ['title', 'description', 'shapes']
+            }
+        }
+    },
+    required: ['suggestions']
+};
 
 // Build the prompt for Gemini
 const buildPrompt = (context: CanvasContext): string => {
@@ -80,54 +132,35 @@ Based on the current design, suggest 1-3 complementary shapes that would:
 2. Complete common UI patterns (headers, cards, buttons, etc.)
 3. Maintain consistent spacing and alignment
 
-Respond with a JSON object in this exact format:
-{
-  "suggestions": [
-    {
-      "title": "Short title for the suggestion",
-      "description": "Brief explanation of why this helps the design",
-      "shapes": [
-        {
-          "type": "rect" or "circle",
-          "x": number (x position),
-          "y": number (y position),
-          "width": number,
-          "height": number,
-          "label": "header" | "card" | "button" | "avatar" | "icon" | "container" | "sidebar" | "content" | "nav" | "footer" | "unknown",
-          "fill": "#hexcolor" (optional),
-          "stroke": "#hexcolor" (optional)
-        }
-      ]
-    }
-  ]
-}
-
 Rules:
 - All coordinates and sizes must be positive numbers
 - Shapes must fit within the canvas bounds (0 to ${context.canvasWidth} for x, 0 to ${context.canvasHeight} for y)
 - Suggest shapes that don't overlap existing shapes
 - Use appropriate sizes for UI elements (buttons ~100x40, cards ~300x200, etc.)
-- Return ONLY the JSON object, no other text`;
+- Use nice colors that complement each other`;
 };
 
-// Parse Gemini response into suggestions
-const parseGeminiResponse = (responseText: string, context: CanvasContext): Suggestion[] => {
+// Interface for parsed Gemini response
+interface GeminiSuggestionResponse {
+    suggestions: Array<{
+        title: string;
+        description: string;
+        shapes: Array<{
+            type: 'rect' | 'circle';
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+            label: string;
+            fill?: string;
+            stroke?: string;
+        }>;
+    }>;
+}
+
+// Parse and validate Gemini response into suggestions
+const parseGeminiResponse = (parsed: GeminiSuggestionResponse, context: CanvasContext): Suggestion[] => {
     try {
-        // Extract JSON from response (handle potential markdown code blocks)
-        let jsonStr = responseText;
-        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-            jsonStr = jsonMatch[1];
-        } else {
-            // Try to find JSON object directly
-            const objectMatch = responseText.match(/\{[\s\S]*\}/);
-            if (objectMatch) {
-                jsonStr = objectMatch[0];
-            }
-        }
-
-        const parsed: GeminiSuggestionResponse = JSON.parse(jsonStr);
-
         if (!parsed.suggestions || !Array.isArray(parsed.suggestions)) {
             return [];
         }
@@ -143,9 +176,7 @@ const parseGeminiResponse = (responseText: string, context: CanvasContext): Sugg
                     shape.x >= 0 &&
                     shape.y >= 0 &&
                     shape.width > 0 &&
-                    shape.height > 0 &&
-                    shape.x + shape.width <= context.canvasWidth &&
-                    shape.y + shape.height <= context.canvasHeight
+                    shape.height > 0
                 )
                 .map(shape => ({
                     type: shape.type,
@@ -213,13 +244,13 @@ export const generateGeminiSuggestions = async (
 
         const prompt = buildPrompt(context);
 
-        // Use Gemini 3 Pro Preview (latest model)
+        // Use Gemini 2.5 Flash with structured output (JSON schema)
         const response = await geminiClient.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                temperature: 0.7,
-                maxOutputTokens: 2048,
+                responseMimeType: 'application/json',
+                responseSchema: suggestionResponseSchema,
             },
         });
 
@@ -229,7 +260,9 @@ export const generateGeminiSuggestions = async (
             return [];
         }
 
-        return parseGeminiResponse(text, context);
+        // Parse the JSON response (guaranteed to be valid JSON due to schema)
+        const parsed: GeminiSuggestionResponse = JSON.parse(text);
+        return parseGeminiResponse(parsed, context);
     } catch (error) {
         console.error('Gemini API error:', error);
         return [];
