@@ -1,10 +1,10 @@
 // ============================================
 // VIBE DESIGN - Gemini AI Suggestion Engine
-// LLM-powered suggestions using Google Gemini
+// LLM-powered suggestions using Google Gemini 3
 // ============================================
 
 import { GoogleGenAI } from '@google/genai';
-import type { Shape, Suggestion, SuggestedShape, SemanticLabel } from '../types';
+import type { Shape, Suggestion, SuggestedShape, SemanticLabel, SuggestionType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Gemini client instance
@@ -57,9 +57,9 @@ interface GeminiSuggestionResponse {
 // Build the prompt for Gemini
 const buildPrompt = (context: CanvasContext): string => {
     const shapesDescription = context.shapes.length > 0
-        ? context.shapes.map(s => 
+        ? context.shapes.map(s =>
             `- ${s.type} "${s.name}" at (${Math.round(s.x)}, ${Math.round(s.y)}) size ${Math.round(s.width)}x${Math.round(s.height)}`
-          ).join('\n')
+        ).join('\n')
         : 'No shapes on canvas yet';
 
     const selectedDescription = context.selectedShapeIds.length > 0
@@ -127,14 +127,14 @@ const parseGeminiResponse = (responseText: string, context: CanvasContext): Sugg
         }
 
         const parsed: GeminiSuggestionResponse = JSON.parse(jsonStr);
-        
+
         if (!parsed.suggestions || !Array.isArray(parsed.suggestions)) {
             return [];
         }
 
         return parsed.suggestions.map((suggestion, index) => {
             const validShapes: SuggestedShape[] = suggestion.shapes
-                .filter(shape => 
+                .filter(shape =>
                     (shape.type === 'rect' || shape.type === 'circle') &&
                     typeof shape.x === 'number' &&
                     typeof shape.y === 'number' &&
@@ -162,7 +162,7 @@ const parseGeminiResponse = (responseText: string, context: CanvasContext): Sugg
 
             return {
                 id: uuidv4(),
-                type: 'completion' as const,
+                type: 'semantic-completion' as SuggestionType,
                 title: suggestion.title || `AI Suggestion ${index + 1}`,
                 description: suggestion.description || 'Suggested by Gemini AI',
                 confidence: 'high' as const,
@@ -213,9 +213,9 @@ export const generateGeminiSuggestions = async (
 
         const prompt = buildPrompt(context);
 
-        // Use Gemini 2.5 Flash for best price-performance
+        // Use Gemini 3 Pro Preview (latest model)
         const response = await geminiClient.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-pro-preview',
             contents: prompt,
             config: {
                 temperature: 0.7,
@@ -224,6 +224,7 @@ export const generateGeminiSuggestions = async (
         });
 
         const text = response.text;
+        
         if (!text) {
             return [];
         }

@@ -1,6 +1,6 @@
 // ============================================
 // VIBE DESIGN - Grid Renderer
-// Renders the canvas grid
+// Renders the canvas grid (supports infinite canvas)
 // ============================================
 
 import React, { memo, useMemo } from 'react';
@@ -11,33 +11,39 @@ interface GridRendererProps {
     height: number;
     gridSize: number;
     visible: boolean;
+    offsetX?: number;
+    offsetY?: number;
 }
 
 const GridRenderer: React.FC<GridRendererProps> = memo(
-    ({ width, height, gridSize, visible }) => {
+    ({ width, height, gridSize, visible, offsetX = 0, offsetY = 0 }) => {
         const lines = useMemo(() => {
             if (!visible) return [];
 
             const linesArray: { points: number[]; key: string }[] = [];
 
+            // Limit grid lines for performance
+            const maxLines = 200;
+            const effectiveGridSize = width / maxLines > gridSize ? Math.ceil(width / maxLines / gridSize) * gridSize : gridSize;
+
             // Vertical lines
-            for (let x = 0; x <= width; x += gridSize) {
+            for (let x = offsetX; x <= offsetX + width; x += effectiveGridSize) {
                 linesArray.push({
-                    points: [x, 0, x, height],
+                    points: [x, offsetY, x, offsetY + height],
                     key: `v-${x}`,
                 });
             }
 
             // Horizontal lines
-            for (let y = 0; y <= height; y += gridSize) {
+            for (let y = offsetY; y <= offsetY + height; y += effectiveGridSize) {
                 linesArray.push({
-                    points: [0, y, width, y],
+                    points: [offsetX, y, offsetX + width, y],
                     key: `h-${y}`,
                 });
             }
 
             return linesArray;
-        }, [width, height, gridSize, visible]);
+        }, [width, height, gridSize, visible, offsetX, offsetY]);
 
         if (!visible) return null;
 

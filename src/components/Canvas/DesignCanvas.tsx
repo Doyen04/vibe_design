@@ -65,6 +65,8 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const isPositionUsed = useSuggestionStore((state) => state.isPositionUsed);
     const markPositionUsed = useSuggestionStore((state) => state.markPositionUsed);
     const markPositionRejected = useSuggestionStore((state) => state.markPositionRejected);
+    const llmEnabled = useSuggestionStore((state) => state.llmEnabled);
+    const setLlmLoading = useSuggestionStore((state) => state.setLlmLoading);
 
     // Get shapes array for rendering
     const shapesArray = useMemo(() => {
@@ -75,7 +77,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
     // Generate suggestions (can be called with optional preview shape for real-time updates)
     const generateSuggestionsWithPreview = useCallback(
-        (previewShapeData?: { type: 'rect' | 'circle'; x: number; y: number; width: number; height: number }) => {
+        async (previewShapeData?: { type: 'rect' | 'circle'; x: number; y: number; width: number; height: number }) => {
             if (!suggestionsEnabled) return;
 
             const allShapes = Array.from(shapes.values());
@@ -107,13 +109,46 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 allShapes.push(tempShape);
             }
 
-            let suggestions = suggestionEngine.generateSuggestions({
-                allShapes,
-                selectedShapeIds,
-                recentActions: [],
-                canvasSize: { width: canvas.width, height: canvas.height },
-                zoomLevel: canvas.zoom,
-            });
+            let suggestions;
+
+            // Use Gemini AI if enabled, otherwise use rule-based engine
+            if (llmEnabled) {
+                try {
+                    setLlmLoading(true);
+                    const { generateGeminiSuggestions, isGeminiInitialized } = await import('../../engine/GeminiSuggestionEngine');
+                    
+                    if (isGeminiInitialized()) {
+                        suggestions = await generateGeminiSuggestions(
+                            allShapes,
+                            selectedShapeIds,
+                            canvas.width,
+                            canvas.height
+                        );
+                    } else {
+                        // Fallback to rule-based if Gemini not initialized
+                        suggestions = suggestionEngine.generateSuggestions({
+                            allShapes,
+                            selectedShapeIds,
+                            recentActions: [],
+                            canvasSize: { width: canvas.width, height: canvas.height },
+                            zoomLevel: canvas.zoom,
+                        });
+                    }
+                } catch (error) {
+                    console.error('Gemini suggestion error:', error);
+                    suggestions = [];
+                } finally {
+                    setLlmLoading(false);
+                }
+            } else {
+                suggestions = suggestionEngine.generateSuggestions({
+                    allShapes,
+                    selectedShapeIds,
+                    recentActions: [],
+                    canvasSize: { width: canvas.width, height: canvas.height },
+                    zoomLevel: canvas.zoom,
+                });
+            }
 
             // Filter out suggestions at used/rejected positions
             suggestions = suggestions.map(suggestion => ({
@@ -125,13 +160,13 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
             setSuggestions(suggestions);
         },
-        [shapes, selectedIds, suggestionsEnabled, canvas, setSuggestions, isPositionUsed]
+        [shapes, selectedIds, suggestionsEnabled, canvas, setSuggestions, isPositionUsed, llmEnabled, setLlmLoading]
     );
 
     // Debounced version for when shapes change
     const generateSuggestions = useMemo(
-        () => debounce(() => generateSuggestionsWithPreview(), 300),
-        [generateSuggestionsWithPreview]
+        () => debounce(() => generateSuggestionsWithPreview(), llmEnabled ? 1000 : 300),
+        [generateSuggestionsWithPreview, llmEnabled]
     );
 
     // Generate suggestions when shapes change
@@ -456,30 +491,27 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             onDragEnd={(e) => {
                 setPan(e.target.x(), e.target.y());
             }}
-            style={{ backgroundColor: '#F5F5F5' }}
+            style={{ backgroundColor: '#E8E8E8', cursor: activeTool === 'pan' ? 'grab' : 'default' }}
         >
             <Layer>
-                {/* Canvas background */}
+                {/* Infinite canvas background pattern */}
                 <Rect
-                    x={0}
-                    y={0}
-                    width={canvas.width}
-                    height={canvas.height}
-                    fill="#FFFFFF"
-                    shadowColor="#000000"
-                    shadowBlur={20}
-                    shadowOpacity={0.1}
-                    shadowOffsetX={0}
-                    shadowOffsetY={4}
-                    listening={false}
+                    x={-10000}
+                    y={-10000}
+                    width={20000}
+                    height={20000}
+                    fill="#F5F5F5"
+                    listening={true}
                 />
 
-                {/* Grid */}
+                {/* Grid - now covers infinite area */}
                 <GridRenderer
-                    width={canvas.width}
-                    height={canvas.height}
+                    width={20000}
+                    height={20000}
                     gridSize={gridSize}
                     visible={showGrid}
+                    offsetX={-10000}
+                    offsetY={-10000}
                 />
 
                 {/* Shapes */}

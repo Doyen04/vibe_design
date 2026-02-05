@@ -238,6 +238,50 @@ const Toolbar: React.FC = () => {
                     onClick={handleExport}
                 />
             </div>
+
+            {/* API Key Modal */}
+            {showApiKeyModal && (
+                <div className="api-key-modal-overlay" onClick={() => setShowApiKeyModal(false)}>
+                    <div className="api-key-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="api-key-modal-header">
+                            <h3>🤖 Enable Gemini AI</h3>
+                            <button 
+                                className="modal-close-btn"
+                                onClick={() => setShowApiKeyModal(false)}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <p className="api-key-modal-description">
+                            Enter your Google Gemini API key to enable AI-powered design suggestions.
+                            Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
+                        </p>
+                        <input
+                            type="password"
+                            className="api-key-input"
+                            placeholder="Enter your Gemini API key..."
+                            value={tempApiKey}
+                            onChange={(e) => setTempApiKey(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleApiKeySubmit()}
+                        />
+                        <div className="api-key-modal-actions">
+                            <button 
+                                className="cancel-btn"
+                                onClick={() => setShowApiKeyModal(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                className="submit-btn"
+                                onClick={handleApiKeySubmit}
+                                disabled={!tempApiKey.trim()}
+                            >
+                                Enable Gemini AI
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
