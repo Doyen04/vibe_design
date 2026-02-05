@@ -245,7 +245,7 @@ const Toolbar: React.FC = () => {
                     <div className="api-key-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="api-key-modal-header">
                             <h3>🤖 Enable Gemini AI</h3>
-                            <button 
+                            <button
                                 className="modal-close-btn"
                                 onClick={() => setShowApiKeyModal(false)}
                             >
@@ -265,13 +265,13 @@ const Toolbar: React.FC = () => {
                             onKeyDown={(e) => e.key === 'Enter' && handleApiKeySubmit()}
                         />
                         <div className="api-key-modal-actions">
-                            <button 
+                            <button
                                 className="cancel-btn"
                                 onClick={() => setShowApiKeyModal(false)}
                             >
                                 Cancel
                             </button>
-                            <button 
+                            <button
                                 className="submit-btn"
                                 onClick={handleApiKeySubmit}
                                 disabled={!tempApiKey.trim()}

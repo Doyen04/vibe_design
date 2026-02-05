@@ -116,7 +116,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 try {
                     setLlmLoading(true);
                     const { generateGeminiSuggestions, isGeminiInitialized } = await import('../../engine/GeminiSuggestionEngine');
-                    
+
                     if (isGeminiInitialized()) {
                         suggestions = await generateGeminiSuggestions(
                             allShapes,

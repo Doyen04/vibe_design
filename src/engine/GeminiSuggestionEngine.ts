@@ -224,7 +224,7 @@ export const generateGeminiSuggestions = async (
         });
 
         const text = response.text;
-        
+
         if (!text) {
             return [];
         }
