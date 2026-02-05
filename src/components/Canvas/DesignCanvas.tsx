@@ -10,7 +10,7 @@ import { debounce } from 'lodash';
 
 import { useShapeStore, useCanvasStore, useSuggestionStore } from '../../store';
 import { suggestionEngine, snapEngine, hierarchyManager } from '../../engine';
-import type { Shape, ShapeCreateInput } from '../../types';
+import type { Shape, ShapeCreateInput, Suggestion } from '../../types';
 
 import ShapeRenderer from './ShapeRenderer';
 import GhostShapeRenderer from './GhostShapeRenderer';
@@ -78,7 +78,11 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     // Generate suggestions (can be called with optional preview shape for real-time updates)
     const generateSuggestionsWithPreview = useCallback(
         async (previewShapeData?: { type: 'rect' | 'circle'; x: number; y: number; width: number; height: number }) => {
-            if (!suggestionsEnabled) return;
+            if (!suggestionsEnabled) {
+                return;
+            }
+
+            console.log('[Suggestions] Generating...', { llmEnabled, shapesCount: shapes.size });
 
             const allShapes = Array.from(shapes.values());
             const selectedShapeIds = Array.from(selectedIds);
@@ -109,71 +113,85 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 allShapes.push(tempShape);
             }
 
-            let suggestions;
+            let suggestions: Suggestion[] = [];
 
-            // Use Gemini AI if enabled, otherwise use rule-based engine
+            // Use Gemini AI if enabled, otherwise use heuristic engine
             if (llmEnabled) {
                 try {
                     setLlmLoading(true);
                     const { generateGeminiSuggestions, isGeminiInitialized } = await import('../../engine/GeminiSuggestionEngine');
 
                     if (isGeminiInitialized()) {
-                        suggestions = await generateGeminiSuggestions(
+                        const result = await generateGeminiSuggestions(
                             allShapes,
                             selectedShapeIds,
                             canvas.width,
                             canvas.height
                         );
+                        suggestions = result.suggestions || [];
+                        
+                        if (result.error) {
+                            console.warn('[Gemini]', result.error);
+                        }
                     } else {
-                        // Fallback to rule-based if Gemini not initialized
-                        suggestions = suggestionEngine.generateSuggestions({
+                        // Fallback to heuristic engine
+                        suggestions = suggestionEngine.generateSuggestions(
                             allShapes,
                             selectedShapeIds,
-                            recentActions: [],
-                            canvasSize: { width: canvas.width, height: canvas.height },
-                            zoomLevel: canvas.zoom,
-                        });
+                            canvas.width,
+                            canvas.height
+                        );
                     }
                 } catch (error) {
-                    console.error('Gemini suggestion error:', error);
-                    suggestions = [];
+                    console.error('[Gemini] Error:', error);
+                    // Fallback to heuristic
+                    suggestions = suggestionEngine.generateSuggestions(
+                        allShapes,
+                        selectedShapeIds,
+                        canvas.width,
+                        canvas.height
+                    );
                 } finally {
                     setLlmLoading(false);
                 }
             } else {
-                suggestions = suggestionEngine.generateSuggestions({
+                // Use heuristic engine
+                suggestions = suggestionEngine.generateSuggestions(
                     allShapes,
                     selectedShapeIds,
-                    recentActions: [],
-                    canvasSize: { width: canvas.width, height: canvas.height },
-                    zoomLevel: canvas.zoom,
-                });
+                    canvas.width,
+                    canvas.height
+                );
             }
 
-            // Filter out suggestions at used/rejected positions
-            suggestions = suggestions.map(suggestion => ({
-                ...suggestion,
-                shapes: suggestion.shapes.filter(shape =>
-                    !isPositionUsed(shape.x, shape.y, shape.width, shape.height)
-                )
-            })).filter(suggestion => suggestion.shapes.length > 0);
+            console.log('[Suggestions] Generated:', suggestions.length);
 
+            // Filter out suggestions at used/rejected positions
+            suggestions = suggestions
+                .map(suggestion => ({
+                    ...suggestion,
+                    shapes: suggestion.shapes.filter(shape =>
+                        !isPositionUsed(shape.x, shape.y, shape.width, shape.height)
+                    )
+                }))
+                .filter(suggestion => suggestion.shapes.length > 0);
+
+            console.log('[Suggestions] After filtering:', suggestions.length);
             setSuggestions(suggestions);
         },
         [shapes, selectedIds, suggestionsEnabled, canvas, setSuggestions, isPositionUsed, llmEnabled, setLlmLoading]
     );
 
-    // Debounced version for when shapes change
+    // Debounced suggestion generation - only called on completed layout events
     const generateSuggestions = useMemo(
-        () => debounce(() => generateSuggestionsWithPreview(), llmEnabled ? 1000 : 300),
+        () => debounce(() => generateSuggestionsWithPreview(), llmEnabled ? 800 : 200),
         [generateSuggestionsWithPreview, llmEnabled]
     );
 
-    // Generate suggestions when shapes change
+    // Cleanup debounce on unmount
     useEffect(() => {
-        generateSuggestions();
         return () => generateSuggestions.cancel();
-    }, [shapes, selectedIds, generateSuggestions]);
+    }, [generateSuggestions]);
 
     // Handle clicking on a ghost shape to accept the suggestion
     const handleGhostShapeAccept = useCallback(
@@ -273,36 +291,29 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
         ]
     );
 
-    // Handle mouse move
+    // Handle mouse move - NO AI calls during movement
     const handleMouseMove = useCallback(
         () => {
             const pos = getPointerPosition();
             if (!pos) return;
 
-            // Update preview shape while drawing
+            // Update preview shape while drawing (visual only, no AI)
             if (isDrawing && drawStartPoint) {
                 const x = Math.min(pos.x, drawStartPoint.x);
                 const y = Math.min(pos.y, drawStartPoint.y);
                 const width = Math.abs(pos.x - drawStartPoint.x);
                 const height = Math.abs(pos.y - drawStartPoint.y);
 
-                const newPreviewShape = {
+                setPreviewShape({
                     type: activeTool as 'rect' | 'circle',
                     x,
                     y,
                     width,
                     height,
-                };
-
-                setPreviewShape(newPreviewShape);
-
-                // Generate real-time suggestions based on what user is drawing
-                if (width > 30 && height > 30) {
-                    generateSuggestionsWithPreview(newPreviewShape);
-                }
+                });
             }
         },
-        [isDrawing, drawStartPoint, activeTool, getPointerPosition, setPreviewShape, generateSuggestionsWithPreview]
+        [isDrawing, drawStartPoint, activeTool, getPointerPosition, setPreviewShape]
     );
 
     // Handle mouse up
@@ -330,6 +341,9 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
             const newShape = addShape(input);
             selectShape(newShape.id, false);
+            
+            // Trigger AI suggestions after shape creation complete
+            generateSuggestions();
         }
 
         setIsDrawing(false);
@@ -344,6 +358,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
         setIsDrawing,
         setDrawStartPoint,
         setPreviewShape,
+        generateSuggestions,
     ]);
 
     // Handle wheel for zoom
@@ -447,8 +462,11 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             if (potentialParent && potentialParent.id !== shape.parentId) {
                 nestShape(id, potentialParent.id);
             }
+            
+            // Trigger AI suggestions after drag complete (layout pause)
+            generateSuggestions();
         },
-        [shapes, setActiveGuides, nestShape]
+        [shapes, setActiveGuides, nestShape, generateSuggestions]
     );
 
     const handleTransformEnd = useCallback(
@@ -470,8 +488,11 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 height: Math.max(10, shape.height * scaleY),
                 rotation: node.rotation(),
             });
+            
+            // Trigger AI suggestions after resize complete
+            generateSuggestions();
         },
-        [shapes, updateShape]
+        [shapes, updateShape, generateSuggestions]
     );
 
     return (

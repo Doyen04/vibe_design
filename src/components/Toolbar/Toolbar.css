@@ -168,14 +168,63 @@
     text-decoration: underline;
 }
 
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #424242;
+    margin-bottom: 6px;
+}
+
+.model-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    box-sizing: border-box;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23424242' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+.model-select:hover {
+    border-color: #BDBDBD;
+}
+
+.model-select:focus {
+    outline: none;
+    border-color: #1976D2;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+}
+
+.model-select:disabled {
+    background-color: #F5F5F5;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .api-key-input {
     width: 100%;
     padding: 12px 16px;
     border: 1px solid #E0E0E0;
     border-radius: 8px;
     font-size: 14px;
-    margin-bottom: 20px;
     box-sizing: border-box;
+}
+
+.form-hint {
+    margin: 6px 0 0 0;
+    font-size: 12px;
+    color: #757575;
+}
 }
 
 .api-key-input:focus {
@@ -223,4 +272,45 @@
 .submit-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Error styles */
+.api-key-input.input-error {
+    border-color: #f44336;
+    background: #ffebee;
+}
+
+.api-key-input.input-error:focus {
+    border-color: #f44336;
+    box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.1);
+}
+
+.api-key-error {
+    color: #f44336;
+    font-size: 13px;
+    padding: 8px 12px;
+    background: #ffebee;
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+
+/* Spinner animation */
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.submit-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
 }

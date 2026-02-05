@@ -72,7 +72,8 @@ export type SuggestionType =
     | 'complete-pattern'
     | 'align-shapes'
     | 'create-grid'
-    | 'semantic-completion';
+    | 'semantic-completion'
+    | 'ai-suggestion';
 
 export type SuggestionConfidence = 'high' | 'medium' | 'low';
 

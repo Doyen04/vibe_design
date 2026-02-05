@@ -1,147 +1,199 @@
 // ============================================
 // VIBE DESIGN - Gemini AI Suggestion Engine
-// LLM-powered suggestions using Google Gemini 2.5
+// LLM-powered suggestions using Google Gemini 2.5 Flash
 // ============================================
 
 import { GoogleGenAI } from '@google/genai';
-import type { Shape, Suggestion, SuggestedShape, SemanticLabel, SuggestionType } from '../types';
+import type { Shape, Suggestion, SuggestedShape, SemanticLabel } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+
+// ============================================
+// Gemini 2.5 Flash Rate Limits (Free Tier)
+// ============================================
+// RPM: 10 requests per minute
+// RPD: 1500 requests per day
+// TPM: 250,000 tokens per minute
+// TPD: 1,000,000 tokens per day
+// ============================================
+
+export interface RateLimitStatus {
+    canMakeRequest: boolean;
+    rpm: { used: number; limit: number; resetsIn: number };
+    rpd: { used: number; limit: number; resetsIn: number };
+    tpm: { used: number; limit: number; resetsIn: number };
+    tpd: { used: number; limit: number; resetsIn: number };
+    error?: string;
+}
+
+// Rate limits for Gemini 2.5 Flash
+const RATE_LIMITS = {
+    RPM: 10,        // Requests per minute
+    RPD: 1500,      // Requests per day
+    TPM: 250000,    // Tokens per minute
+    TPD: 1000000,   // Tokens per day
+};
 
 // Gemini client instance
 let geminiClient: GoogleGenAI | null = null;
+let apiKey: string | null = null;
 
-// Initialize Gemini client with API key
-export const initializeGemini = (apiKey: string): void => {
-    geminiClient = new GoogleGenAI({ apiKey });
+// Rate limiting state
+let minuteRequestCount = 0;
+let dayRequestCount = 0;
+let minuteTokenCount = 0;
+let dayTokenCount = 0;
+let minuteResetTime = 0;
+let dayResetTime = 0;
+
+// Initialize Gemini client
+export const initializeGemini = (key: string): void => {
+    apiKey = key;
+    geminiClient = new GoogleGenAI({ apiKey: key });
+    resetRateLimits();
+};
+
+// Reset rate limits
+const resetRateLimits = (): void => {
+    const now = Date.now();
+    minuteRequestCount = 0;
+    dayRequestCount = 0;
+    minuteTokenCount = 0;
+    dayTokenCount = 0;
+    minuteResetTime = now + 60000; // 1 minute
+    dayResetTime = now + 86400000; // 24 hours
 };
 
 // Check if Gemini is initialized
 export const isGeminiInitialized = (): boolean => {
-    return geminiClient !== null;
+    return geminiClient !== null && apiKey !== null;
 };
 
-// Interface for canvas context sent to Gemini
-interface CanvasContext {
-    shapes: Array<{
-        id: string;
-        type: string;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        name: string;
-    }>;
-    canvasWidth: number;
-    canvasHeight: number;
-    selectedShapeIds: string[];
+// Get rate limit status
+export const getRateLimitStatus = (): RateLimitStatus => {
+    const now = Date.now();
+    
+    // Reset minute counters if needed
+    if (now > minuteResetTime) {
+        minuteRequestCount = 0;
+        minuteTokenCount = 0;
+        minuteResetTime = now + 60000;
+    }
+    
+    // Reset day counters if needed
+    if (now > dayResetTime) {
+        dayRequestCount = 0;
+        dayTokenCount = 0;
+        dayResetTime = now + 86400000;
+    }
+    
+    const canMakeRequest = 
+        minuteRequestCount < RATE_LIMITS.RPM &&
+        dayRequestCount < RATE_LIMITS.RPD &&
+        minuteTokenCount < RATE_LIMITS.TPM &&
+        dayTokenCount < RATE_LIMITS.TPD;
+    
+    let error: string | undefined;
+    if (!canMakeRequest) {
+        if (minuteRequestCount >= RATE_LIMITS.RPM) {
+            error = `Rate limit: ${RATE_LIMITS.RPM} requests/minute exceeded. Wait ${Math.ceil((minuteResetTime - now) / 1000)}s`;
+        } else if (dayRequestCount >= RATE_LIMITS.RPD) {
+            error = `Daily limit: ${RATE_LIMITS.RPD} requests/day exceeded`;
+        } else if (minuteTokenCount >= RATE_LIMITS.TPM) {
+            error = `Token limit: ${RATE_LIMITS.TPM} tokens/minute exceeded`;
+        } else if (dayTokenCount >= RATE_LIMITS.TPD) {
+            error = `Daily token limit: ${RATE_LIMITS.TPD} tokens/day exceeded`;
+        }
+    }
+    
+    return {
+        canMakeRequest,
+        rpm: { used: minuteRequestCount, limit: RATE_LIMITS.RPM, resetsIn: Math.max(0, minuteResetTime - now) },
+        rpd: { used: dayRequestCount, limit: RATE_LIMITS.RPD, resetsIn: Math.max(0, dayResetTime - now) },
+        tpm: { used: minuteTokenCount, limit: RATE_LIMITS.TPM, resetsIn: Math.max(0, minuteResetTime - now) },
+        tpd: { used: dayTokenCount, limit: RATE_LIMITS.TPD, resetsIn: Math.max(0, dayResetTime - now) },
+        error,
+    };
+};
+
+// Record API usage
+const recordUsage = (tokenCount: number = 500): void => {
+    minuteRequestCount++;
+    dayRequestCount++;
+    minuteTokenCount += tokenCount;
+    dayTokenCount += tokenCount;
+};
+
+// Validate API key
+export const validateApiKey = async (key: string): Promise<{ valid: boolean; error?: string }> => {
+    try {
+        const testClient = new GoogleGenAI({ apiKey: key });
+        const response = await testClient.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: 'Say OK',
+            config: { maxOutputTokens: 5 },
+        });
+        
+        if (response.text) {
+            return { valid: true };
+        }
+        return { valid: false, error: 'No response from API' };
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        
+        if (msg.includes('API_KEY_INVALID') || msg.includes('invalid')) {
+            return { valid: false, error: 'Invalid API key' };
+        }
+        if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota')) {
+            return { valid: false, error: 'Rate limit exceeded. Please wait and try again.' };
+        }
+        
+        return { valid: false, error: msg };
+    }
+};
+
+// Build prompt for suggestions
+const buildPrompt = (shapes: Shape[], canvasWidth: number, canvasHeight: number): string => {
+    const shapeDescriptions = shapes.length > 0
+        ? shapes.map(s => `- ${s.type} at (${Math.round(s.x)}, ${Math.round(s.y)}) size ${Math.round(s.width)}x${Math.round(s.height)}`).join('\n')
+        : 'Empty canvas';
+
+    return `You are a UI design assistant. Given the current canvas state, suggest 1-2 complementary shapes.
+
+Canvas: ${canvasWidth}x${canvasHeight}
+Current shapes:
+${shapeDescriptions}
+
+Respond with JSON only:
+{
+  "suggestions": [
+    {
+      "title": "Short title",
+      "description": "Why this helps",
+      "shapes": [
+        {
+          "type": "rect",
+          "x": 100,
+          "y": 100,
+          "width": 200,
+          "height": 100,
+          "fill": "#E8F5E9",
+          "stroke": "#4CAF50"
+        }
+      ]
+    }
+  ]
 }
 
-// JSON Schema for structured output
-const suggestionResponseSchema = {
-    type: 'object',
-    properties: {
-        suggestions: {
-            type: 'array',
-            description: 'List of design suggestions',
-            items: {
-                type: 'object',
-                properties: {
-                    title: {
-                        type: 'string',
-                        description: 'Short title for the suggestion'
-                    },
-                    description: {
-                        type: 'string',
-                        description: 'Brief explanation of why this helps the design'
-                    },
-                    shapes: {
-                        type: 'array',
-                        description: 'Shapes to add for this suggestion',
-                        items: {
-                            type: 'object',
-                            properties: {
-                                type: {
-                                    type: 'string',
-                                    enum: ['rect', 'circle'],
-                                    description: 'Shape type'
-                                },
-                                x: {
-                                    type: 'number',
-                                    description: 'X position'
-                                },
-                                y: {
-                                    type: 'number',
-                                    description: 'Y position'
-                                },
-                                width: {
-                                    type: 'number',
-                                    description: 'Width of the shape'
-                                },
-                                height: {
-                                    type: 'number',
-                                    description: 'Height of the shape'
-                                },
-                                label: {
-                                    type: 'string',
-                                    enum: ['header', 'card', 'button', 'avatar', 'icon', 'container', 'sidebar', 'content', 'nav', 'footer', 'unknown'],
-                                    description: 'Semantic label for the shape'
-                                },
-                                fill: {
-                                    type: 'string',
-                                    description: 'Fill color in hex format'
-                                },
-                                stroke: {
-                                    type: 'string',
-                                    description: 'Stroke color in hex format'
-                                }
-                            },
-                            required: ['type', 'x', 'y', 'width', 'height', 'label']
-                        }
-                    }
-                },
-                required: ['title', 'description', 'shapes']
-            }
-        }
-    },
-    required: ['suggestions']
-};
-
-// Build the prompt for Gemini
-const buildPrompt = (context: CanvasContext): string => {
-    const shapesDescription = context.shapes.length > 0
-        ? context.shapes.map(s =>
-            `- ${s.type} "${s.name}" at (${Math.round(s.x)}, ${Math.round(s.y)}) size ${Math.round(s.width)}x${Math.round(s.height)}`
-        ).join('\n')
-        : 'No shapes on canvas yet';
-
-    const selectedDescription = context.selectedShapeIds.length > 0
-        ? `Selected shapes: ${context.selectedShapeIds.join(', ')}`
-        : 'No shapes selected';
-
-    return `You are an AI design assistant for a Figma/Canva-like design tool. Analyze the current canvas state and suggest complementary shapes that would improve the design.
-
-Canvas size: ${context.canvasWidth}x${context.canvasHeight}
-
-Current shapes on canvas:
-${shapesDescription}
-
-${selectedDescription}
-
-Based on the current design, suggest 1-3 complementary shapes that would:
-1. Create visual balance and harmony
-2. Complete common UI patterns (headers, cards, buttons, etc.)
-3. Maintain consistent spacing and alignment
-
 Rules:
-- All coordinates and sizes must be positive numbers
-- Shapes must fit within the canvas bounds (0 to ${context.canvasWidth} for x, 0 to ${context.canvasHeight} for y)
-- Suggest shapes that don't overlap existing shapes
-- Use appropriate sizes for UI elements (buttons ~100x40, cards ~300x200, etc.)
-- Use nice colors that complement each other`;
+- type must be "rect" or "circle"
+- x, y, width, height must be positive numbers
+- Shapes must not overlap existing shapes
+- Keep shapes within canvas bounds
+- Use pleasant colors`;
 };
 
-// Interface for parsed Gemini response
-interface GeminiSuggestionResponse {
+// Parse Gemini response
+interface GeminiResponse {
     suggestions: Array<{
         title: string;
         description: string;
@@ -151,32 +203,40 @@ interface GeminiSuggestionResponse {
             y: number;
             width: number;
             height: number;
-            label: string;
             fill?: string;
             stroke?: string;
         }>;
     }>;
 }
 
-// Parse and validate Gemini response into suggestions
-const parseGeminiResponse = (parsed: GeminiSuggestionResponse, context: CanvasContext): Suggestion[] => {
+const parseResponse = (text: string): Suggestion[] => {
     try {
+        // Extract JSON from response (handle markdown code blocks)
+        let jsonStr = text;
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[1];
+        }
+        
+        const parsed: GeminiResponse = JSON.parse(jsonStr.trim());
+        
         if (!parsed.suggestions || !Array.isArray(parsed.suggestions)) {
+            console.warn('[Gemini] Invalid response format');
             return [];
         }
 
-        return parsed.suggestions.map((suggestion, index) => {
-            const validShapes: SuggestedShape[] = suggestion.shapes
-                .filter(shape =>
+        return parsed.suggestions.map((s, i) => ({
+            id: uuidv4(),
+            type: 'ai-suggestion' as const,
+            title: s.title || `Suggestion ${i + 1}`,
+            description: s.description || 'AI suggestion',
+            confidence: 'high' as const,
+            priority: 80 - i * 10,
+            shapes: s.shapes
+                .filter(shape => 
                     (shape.type === 'rect' || shape.type === 'circle') &&
-                    typeof shape.x === 'number' &&
-                    typeof shape.y === 'number' &&
-                    typeof shape.width === 'number' &&
-                    typeof shape.height === 'number' &&
-                    shape.x >= 0 &&
-                    shape.y >= 0 &&
-                    shape.width > 0 &&
-                    shape.height > 0
+                    shape.x >= 0 && shape.y >= 0 &&
+                    shape.width > 0 && shape.height > 0
                 )
                 .map(shape => ({
                     type: shape.type,
@@ -184,32 +244,22 @@ const parseGeminiResponse = (parsed: GeminiSuggestionResponse, context: CanvasCo
                     y: shape.y,
                     width: shape.width,
                     height: shape.height,
-                    label: (shape.label || 'unknown') as SemanticLabel,
+                    label: 'unknown' as SemanticLabel,
                     parentId: null,
                     fill: shape.fill || '#E8F5E9',
                     stroke: shape.stroke || '#4CAF50',
                     isGhost: true,
-                }));
-
-            return {
-                id: uuidv4(),
-                type: 'semantic-completion' as SuggestionType,
-                title: suggestion.title || `AI Suggestion ${index + 1}`,
-                description: suggestion.description || 'Suggested by Gemini AI',
-                confidence: 'high' as const,
-                priority: 90 - index * 10,
-                shapes: validShapes,
-                context: {
-                    triggerShapeId: context.selectedShapeIds[0] || null,
-                    triggerAction: 'create' as const,
-                    parentShapeId: null,
-                    relatedShapeIds: context.selectedShapeIds,
-                },
-                timestamp: Date.now(),
-            };
-        }).filter(s => s.shapes.length > 0);
+                })),
+            context: {
+                triggerShapeId: null,
+                triggerAction: 'create' as const,
+                parentShapeId: null,
+                relatedShapeIds: [],
+            },
+            timestamp: Date.now(),
+        })).filter(s => s.shapes.length > 0);
     } catch (error) {
-        console.error('Failed to parse Gemini response:', error);
+        console.error('[Gemini] Parse error:', error);
         return [];
     }
 };
@@ -217,60 +267,65 @@ const parseGeminiResponse = (parsed: GeminiSuggestionResponse, context: CanvasCo
 // Generate suggestions using Gemini
 export const generateGeminiSuggestions = async (
     shapes: Shape[],
-    selectedShapeIds: string[],
+    _selectedIds: string[],
     canvasWidth: number,
     canvasHeight: number
-): Promise<Suggestion[]> => {
+): Promise<{ suggestions: Suggestion[]; error?: string }> => {
+    console.log('[Gemini] Generating suggestions...');
+    
     if (!geminiClient) {
-        console.warn('Gemini client not initialized');
-        return [];
+        return { suggestions: [], error: 'Gemini not initialized' };
+    }
+
+    // Check rate limits
+    const status = getRateLimitStatus();
+    if (!status.canMakeRequest) {
+        console.warn('[Gemini] Rate limited:', status.error);
+        return { suggestions: [], error: status.error };
     }
 
     try {
-        const context: CanvasContext = {
-            shapes: shapes.map(s => ({
-                id: s.id,
-                type: s.type,
-                x: s.x,
-                y: s.y,
-                width: s.width,
-                height: s.height,
-                name: s.name,
-            })),
-            canvasWidth,
-            canvasHeight,
-            selectedShapeIds,
-        };
-
-        const prompt = buildPrompt(context);
-
-        // Use Gemini 2.5 Flash with structured output (JSON schema)
+        const prompt = buildPrompt(shapes, canvasWidth, canvasHeight);
+        
         const response = await geminiClient.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                responseMimeType: 'application/json',
-                responseSchema: suggestionResponseSchema,
+                maxOutputTokens: 1000,
+                temperature: 0.7,
             },
         });
 
+        // Record usage (estimate ~500 tokens for this request)
+        recordUsage(500);
+
         const text = response.text;
+        console.log('[Gemini] Response received');
 
         if (!text) {
-            return [];
+            return { suggestions: [] };
         }
 
-        // Parse the JSON response (guaranteed to be valid JSON due to schema)
-        const parsed: GeminiSuggestionResponse = JSON.parse(text);
-        return parseGeminiResponse(parsed, context);
+        const suggestions = parseResponse(text);
+        console.log('[Gemini] Parsed', suggestions.length, 'suggestions');
+        
+        return { suggestions };
     } catch (error) {
-        console.error('Gemini API error:', error);
-        return [];
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Gemini] API error:', msg);
+        
+        if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
+            return { suggestions: [], error: 'Rate limit exceeded. Please wait.' };
+        }
+        
+        return { suggestions: [], error: msg };
     }
 };
 
 export default {
     initializeGemini,
     isGeminiInitialized,
+    validateApiKey,
     generateGeminiSuggestions,
+    getRateLimitStatus,
 };
