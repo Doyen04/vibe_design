@@ -128,10 +128,10 @@ const Toolbar: React.FC = () => {
         if (tempApiKey.trim()) {
             setValidating(true);
             clearLlmError();
-            
+
             try {
                 const result = await validateApiKey(tempApiKey.trim());
-                
+
                 if (result.valid) {
                     setLlmApiKey(tempApiKey.trim());
                     initializeGemini(tempApiKey.trim());
@@ -276,7 +276,7 @@ const Toolbar: React.FC = () => {
                             Enter your Google Gemini API key to enable AI-powered design suggestions.
                             Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
                         </p>
-                        
+
                         <div className="form-group">
                             <label className="form-label">API Key</label>
                             <input

@@ -4,7 +4,7 @@
 // ============================================
 
 import { v4 as uuidv4 } from 'uuid';
-import type { Shape, Suggestion, SuggestedShape, SemanticLabel } from '../types';
+import type { Shape, Suggestion, SemanticLabel } from '../types';
 
 // ============================================
 // Simple Suggestion Engine
@@ -18,7 +18,7 @@ export class SimpleSuggestionEngine {
         canvasHeight: number
     ): Suggestion[] {
         console.log('[Heuristic] Generating suggestions for', shapes.length, 'shapes');
-        
+
         const suggestions: Suggestion[] = [];
 
         // Empty canvas - suggest a starting container
@@ -92,12 +92,12 @@ export class SimpleSuggestionEngine {
     ): Suggestion {
         const gap = 20;
         const newX = shape.x + shape.width + gap;
-        
+
         // Check if fits on canvas
         const fits = newX + shape.width <= canvasWidth;
-        
+
         // Check for overlap with existing shapes
-        const overlaps = allShapes.some(s => 
+        const overlaps = allShapes.some(s =>
             s.id !== shape.id &&
             this.shapesOverlap(
                 { x: newX, y: shape.y, width: shape.width, height: shape.height },
@@ -141,12 +141,12 @@ export class SimpleSuggestionEngine {
     ): Suggestion {
         const gap = 20;
         const newY = shape.y + shape.height + gap;
-        
+
         // Check if fits on canvas
         const fits = newY + shape.height <= canvasHeight;
-        
+
         // Check for overlap
-        const overlaps = allShapes.some(s => 
+        const overlaps = allShapes.some(s =>
             s.id !== shape.id &&
             this.shapesOverlap(
                 { x: shape.x, y: newY, width: shape.width, height: shape.height },

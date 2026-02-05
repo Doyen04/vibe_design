@@ -78,6 +78,8 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     // Generate suggestions (can be called with optional preview shape for real-time updates)
     const generateSuggestionsWithPreview = useCallback(
         async (previewShapeData?: { type: 'rect' | 'circle'; x: number; y: number; width: number; height: number }) => {
+            console.log('running ');
+
             if (!suggestionsEnabled) {
                 return;
             }
@@ -104,11 +106,10 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                     visible: true,
                     locked: false,
                     name: 'Preview',
+                    label: 'unknown',
                     parentId: null,
-                    childIds: [],
+                    children: [],
                     zIndex: allShapes.length,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
                 };
                 allShapes.push(tempShape);
             }
@@ -129,7 +130,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                             canvas.height
                         );
                         suggestions = result.suggestions || [];
-                        
+
                         if (result.error) {
                             console.warn('[Gemini]', result.error);
                         }
@@ -182,10 +183,19 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
         [shapes, selectedIds, suggestionsEnabled, canvas, setSuggestions, isPositionUsed, llmEnabled, setLlmLoading]
     );
 
+    // Use ref to keep stable reference to the callback
+    const generateSuggestionsRef = useRef(generateSuggestionsWithPreview);
+    useEffect(() => {
+        generateSuggestionsRef.current = generateSuggestionsWithPreview;
+    }, [generateSuggestionsWithPreview]);
+
     // Debounced suggestion generation - only called on completed layout events
     const generateSuggestions = useMemo(
-        () => debounce(() => generateSuggestionsWithPreview(), llmEnabled ? 800 : 200),
-        [generateSuggestionsWithPreview, llmEnabled]
+        () => {
+            console.log('memo running');
+            return debounce(() => generateSuggestionsRef.current(), llmEnabled ? 800 : 200);
+        },
+        [llmEnabled]
     );
 
     // Cleanup debounce on unmount
@@ -341,7 +351,9 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
             const newShape = addShape(input);
             selectShape(newShape.id, false);
-            
+            console.log('mouse up');
+
+
             // Trigger AI suggestions after shape creation complete
             generateSuggestions();
         }
@@ -462,7 +474,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             if (potentialParent && potentialParent.id !== shape.parentId) {
                 nestShape(id, potentialParent.id);
             }
-            
+
             // Trigger AI suggestions after drag complete (layout pause)
             generateSuggestions();
         },
@@ -488,7 +500,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                 height: Math.max(10, shape.height * scaleY),
                 rotation: node.rotation(),
             });
-            
+
             // Trigger AI suggestions after resize complete
             generateSuggestions();
         },
