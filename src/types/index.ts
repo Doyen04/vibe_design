@@ -6,6 +6,45 @@
 // Note: Only 'frame' can nest other shapes. 'rect' and 'circle' cannot contain children.
 export type ShapeType = 'rect' | 'circle' | 'frame';
 
+// Layout Mode Types for Frames
+export type LayoutMode = 'free' | 'flex' | 'grid';
+
+// Flex Layout Properties
+export type FlexDirection = 'row' | 'column' | 'row-reverse' | 'column-reverse';
+export type FlexJustify = 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
+export type FlexAlign = 'flex-start' | 'flex-end' | 'center' | 'stretch' | 'baseline';
+export type FlexWrap = 'nowrap' | 'wrap' | 'wrap-reverse';
+
+export interface FlexLayoutSettings {
+    direction: FlexDirection;
+    justifyContent: FlexJustify;
+    alignItems: FlexAlign;
+    wrap: FlexWrap;
+    gap: number;
+    rowGap?: number;
+    columnGap?: number;
+    padding: { top: number; right: number; bottom: number; left: number };
+}
+
+// Grid Layout Properties
+export interface GridLayoutSettings {
+    columns: number;
+    rows: number;
+    columnGap: number;
+    rowGap: number;
+    autoFlow: 'row' | 'column' | 'dense';
+    padding: { top: number; right: number; bottom: number; left: number };
+    cellWidth?: number | 'auto';  // auto means equal distribution
+    cellHeight?: number | 'auto';
+}
+
+// Combined Layout Settings
+export interface LayoutSettings {
+    mode: LayoutMode;
+    flex?: FlexLayoutSettings;
+    grid?: GridLayoutSettings;
+}
+
 // Semantic labels for shapes (AI-detected meanings)
 export type SemanticLabel =
     | 'page-container'
@@ -48,6 +87,9 @@ export interface Shape {
     visible: boolean;
     locked: boolean;
     // For circles, width and height are treated as diameter
+    
+    // Layout settings (only applicable for frames)
+    layout?: LayoutSettings;
 }
 
 // Shape creation input (partial shape for creating new shapes)

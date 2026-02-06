@@ -7,12 +7,14 @@
 // - Root shapes have coordinates relative to canvas (world coordinates)
 // - Nested shapes have coordinates relative to their parent shape
 // - Konva Groups automatically handle transform inheritance
+// - Layout modes (flex, grid) calculate child positions automatically
 // ============================================
 
 import React, { memo, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Rect, Circle, Group, Transformer } from 'react-konva';
+import { Rect, Circle, Group, Transformer, Text, Line } from 'react-konva';
 import type { Shape } from '../../types';
 import { useCanvasStore, useShapeStore } from '../../store';
+import { calculateChildPositions } from '../../engine/LayoutEngine';
 import type Konva from 'konva';
 
 interface ShapeRendererProps {
@@ -56,6 +58,22 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
                 .map((childId) => shapes.get(childId))
                 .filter(Boolean) as Shape[];
         }, [shape.children, shapes]);
+
+        // Calculate layout positions for children if this is a frame with layout
+        const layoutPositions = useMemo(() => {
+            if (shape.type !== 'frame' || !shape.layout || shape.layout.mode === 'free') {
+                return null;
+            }
+            return calculateChildPositions(shape, childShapes);
+        }, [shape, childShapes]);
+
+        // Get effective position for a child (considering layout)
+        const getChildPosition = useCallback((child: Shape) => {
+            if (!layoutPositions) {
+                return { x: child.x, y: child.y };
+            }
+            return layoutPositions.positions.get(child.id) || { x: child.x, y: child.y };
+        }, [layoutPositions]);
 
         // Update transformer when selection changes or shape dimensions change
         useEffect(() => {
@@ -118,6 +136,87 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
 
         const isFrame = shape.type === 'frame';
         const strokeColor = isSelected ? '#2196F3' : isHovered ? '#64B5F6' : shape.stroke;
+        const hasLayout = isFrame && shape.layout && shape.layout.mode !== 'free';
+        const layoutMode = shape.layout?.mode;
+
+        // Render layout indicator for frames with active layout
+        const renderLayoutIndicator = () => {
+            if (!hasLayout || !isSelected) return null;
+            
+            const indicatorText = layoutMode === 'flex' ? '⟷ Flex' : '▦ Grid';
+            const bgColor = layoutMode === 'flex' ? '#9C27B0' : '#FF9800';
+            
+            return (
+                <>
+                    <Rect
+                        x={4}
+                        y={4}
+                        width={50}
+                        height={18}
+                        fill={bgColor}
+                        cornerRadius={3}
+                        opacity={0.9}
+                    />
+                    <Text
+                        x={8}
+                        y={7}
+                        text={indicatorText}
+                        fontSize={10}
+                        fontStyle="bold"
+                        fill="#FFFFFF"
+                    />
+                </>
+            );
+        };
+
+        // Render grid overlay for grid layout
+        const renderGridOverlay = () => {
+            if (!isFrame || !shape.layout || shape.layout.mode !== 'grid' || !isSelected) {
+                return null;
+            }
+            
+            const grid = shape.layout.grid!;
+            const { columns, rows, columnGap, rowGap, padding } = grid;
+            
+            const availableWidth = shape.width - padding.left - padding.right;
+            const availableHeight = shape.height - padding.top - padding.bottom;
+            const cellWidth = (availableWidth - columnGap * (columns - 1)) / columns;
+            const cellHeight = (availableHeight - rowGap * (rows - 1)) / rows;
+            
+            const lines: React.ReactNode[] = [];
+            
+            // Vertical lines
+            for (let i = 1; i < columns; i++) {
+                const x = padding.left + i * (cellWidth + columnGap) - columnGap / 2;
+                lines.push(
+                    <Line
+                        key={`v-${i}`}
+                        points={[x, padding.top, x, shape.height - padding.bottom]}
+                        stroke="#FF9800"
+                        strokeWidth={1}
+                        dash={[4, 4]}
+                        opacity={0.5}
+                    />
+                );
+            }
+            
+            // Horizontal lines
+            for (let i = 1; i < rows; i++) {
+                const y = padding.top + i * (cellHeight + rowGap) - rowGap / 2;
+                lines.push(
+                    <Line
+                        key={`h-${i}`}
+                        points={[padding.left, y, shape.width - padding.right, y]}
+                        stroke="#FF9800"
+                        strokeWidth={1}
+                        dash={[4, 4]}
+                        opacity={0.5}
+                    />
+                );
+            }
+            
+            return lines;
+        };
 
         // Render the shape content (rect, circle, or frame)
         const renderShapeContent = () => {
@@ -177,24 +276,39 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
                     {/* The shape's visual content */}
                     {renderShapeContent()}
 
+                    {/* Layout indicator for frames with layout */}
+                    {renderLayoutIndicator()}
+                    
+                    {/* Grid overlay for grid layout */}
+                    {renderGridOverlay()}
+
                     {/* 
                       Recursively render children INSIDE this Group.
                       Because children are inside, their coordinates are relative to this shape.
                       Konva automatically applies the parent's transform (translation + rotation).
+                      For frames with layout, children use calculated positions.
                     */}
-                    {childShapes.map((childShape) => (
-                        <ShapeRenderer
-                            key={childShape.id}
-                            shape={childShape}
-                            isSelected={selectedIds.has(childShape.id)}
-                            isHovered={hoveredId === childShape.id}
-                            onSelect={onSelect}
-                            onDragStart={onDragStart}
-                            onDragMove={onDragMove}
-                            onDragEnd={onDragEnd}
-                            onTransformEnd={onTransformEnd}
-                        />
-                    ))}
+                    {childShapes.map((childShape) => {
+                        const pos = getChildPosition(childShape);
+                        // Create a modified shape with calculated layout position
+                        const effectiveShape = layoutPositions 
+                            ? { ...childShape, x: pos.x, y: pos.y }
+                            : childShape;
+                        
+                        return (
+                            <ShapeRenderer
+                                key={childShape.id}
+                                shape={effectiveShape}
+                                isSelected={selectedIds.has(childShape.id)}
+                                isHovered={hoveredId === childShape.id}
+                                onSelect={onSelect}
+                                onDragStart={onDragStart}
+                                onDragMove={onDragMove}
+                                onDragEnd={onDragEnd}
+                                onTransformEnd={onTransformEnd}
+                            />
+                        );
+                    })}
                 </Group>
 
                 {/* Transformer for selected shapes - render at root level for proper behavior */}

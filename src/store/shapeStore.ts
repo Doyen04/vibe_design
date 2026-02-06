@@ -64,10 +64,30 @@ const DEFAULT_SHAPE_COLORS = {
     frame: { fill: 'transparent', stroke: '#9E9E9E' },
 };
 
+const DEFAULT_FLEX_LAYOUT = {
+    direction: 'row' as const,
+    justifyContent: 'flex-start' as const,
+    alignItems: 'flex-start' as const,
+    wrap: 'nowrap' as const,
+    gap: 10,
+    padding: { top: 10, right: 10, bottom: 10, left: 10 },
+};
+
+const DEFAULT_GRID_LAYOUT = {
+    columns: 2,
+    rows: 2,
+    columnGap: 10,
+    rowGap: 10,
+    autoFlow: 'row' as const,
+    padding: { top: 10, right: 10, bottom: 10, left: 10 },
+    cellWidth: 'auto' as const,
+    cellHeight: 'auto' as const,
+};
+
 const createDefaultShape = (input: ShapeCreateInput): Shape => {
     const colors = DEFAULT_SHAPE_COLORS[input.type];
 
-    return {
+    const baseShape = {
         id: uuidv4(),
         type: input.type,
         x: input.x,
@@ -87,6 +107,20 @@ const createDefaultShape = (input: ShapeCreateInput): Shape => {
         visible: true,
         locked: false,
     };
+
+    // Add default layout settings for frames
+    if (input.type === 'frame') {
+        return {
+            ...baseShape,
+            layout: {
+                mode: 'free' as const,
+                flex: DEFAULT_FLEX_LAYOUT,
+                grid: DEFAULT_GRID_LAYOUT,
+            },
+        };
+    }
+
+    return baseShape;
 };
 
 export const useShapeStore = create<ShapeState>()(

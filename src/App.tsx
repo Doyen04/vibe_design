@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-import { DesignCanvas, Toolbar, LayerPanel, SuggestionPanel, DesignIntentModal } from './components';
+import { DesignCanvas, Toolbar, LayerPanel, DesignIntentModal, RightPanel } from './components';
 import { useKeyboardShortcuts } from './hooks';
 
 import './App.css';
@@ -50,7 +50,7 @@ const App: React.FC = () => {
         <div className="canvas-container">
           <DesignCanvas width={canvasWidth} height={canvasHeight} />
         </div>
-        <SuggestionPanel />
+        <RightPanel />
       </div>
     </div>
   );

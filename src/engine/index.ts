@@ -16,6 +16,13 @@ export {
 } from './GeminiSuggestionEngine';
 export type { RateLimitStatus } from './GeminiSuggestionEngine';
 
+// Layout engine for flex/grid layouts
+export {
+    calculateChildPositions,
+    getEffectivePosition,
+} from './LayoutEngine';
+export type { CalculatedPosition, LayoutResult } from './LayoutEngine';
+
 // Transform utilities for coordinate system conversions
 export {
     transformMatrix,
