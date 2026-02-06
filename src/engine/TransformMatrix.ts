@@ -143,12 +143,12 @@ export function createTransformMatrix(
 
     // Build transform: translate to position, then rotate around center
     // T(x,y) * T(cx,cy) * R(angle) * T(-cx,-cy) * S(scale)
-    
+
     let result = translationMatrix(x, y);
     result = multiplyMatrices(result, translationMatrix(cx, cy));
     result = multiplyMatrices(result, rotationMatrix(angleRad));
     result = multiplyMatrices(result, translationMatrix(-cx, -cy));
-    
+
     if (scaleX !== 1 || scaleY !== 1) {
         result = multiplyMatrices(result, scaleMatrix(scaleX, scaleY));
     }
@@ -216,10 +216,10 @@ export function rotatePointAroundCenter(
     const angleRad = degreesToRadians(angleDegrees);
     const cos = Math.cos(angleRad);
     const sin = Math.sin(angleRad);
-    
+
     const dx = point.x - center.x;
     const dy = point.y - center.y;
-    
+
     return {
         x: center.x + dx * cos - dy * sin,
         y: center.y + dx * sin + dy * cos,
@@ -278,7 +278,7 @@ export function decomposeMatrix(matrix: Matrix2D): {
     const position = getPositionFromMatrix(matrix);
     const rotation = getRotationFromMatrix(matrix);
     const scale = getScaleFromMatrix(matrix);
-    
+
     return {
         x: position.x,
         y: position.y,

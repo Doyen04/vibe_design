@@ -15,6 +15,7 @@ import {
     ChevronRight,
     ChevronDown,
     Trash2,
+    Frame,
 } from 'lucide-react';
 
 import { useShapeStore } from '../../store';
@@ -129,6 +130,8 @@ const LayerItem: React.FC<LayerItemProps> = ({
             <div className="layer-icon">
                 {shape.type === 'rect' ? (
                     <Square size={14} />
+                ) : shape.type === 'frame' ? (
+                    <Frame size={14} />
                 ) : (
                     <Circle size={14} />
                 )}
