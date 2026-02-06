@@ -9,7 +9,7 @@ import type Konva from 'konva';
 import { debounce } from 'lodash';
 
 import { useShapeStore, useCanvasStore, useSuggestionStore } from '../../store';
-import { suggestionEngine, snapEngine } from '../../engine';
+import { suggestionEngine, snapEngine, calculateChildPositions } from '../../engine';
 import type { Shape, ShapeCreateInput, Suggestion } from '../../types';
 
 import ShapeRenderer from './ShapeRenderer';
@@ -35,6 +35,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const clearSelection = useShapeStore((state) => state.clearSelection);
     const batchUpdate = useShapeStore((state) => state.batchUpdate);
     const nestShape = useShapeStore((state) => state.nestShape);
+    const swapChildrenInParent = useShapeStore((state) => state.swapChildrenInParent);
 
     // Canvas store
     const activeTool = useCanvasStore((state) => state.activeTool);
@@ -445,7 +446,10 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             }
 
             // Calculate snap in world coordinates
-            const otherShapes = Array.from(currentShapes.values()).filter((s) => s.id !== id);
+            // Exclude the shape itself AND its parent (to prevent snapping to parent edges)
+            const otherShapes = Array.from(currentShapes.values()).filter(
+                (s) => s.id !== id && s.id !== shape.parentId
+            );
             const snapResult = snapEngine.snapShape(
                 { ...shape, x: worldX, y: worldY },
                 worldX,
@@ -562,12 +566,24 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             x={canvas.panX}
             y={canvas.panY}
             draggable={activeTool === 'pan'}
+            dragBoundFunc={(pos) => {
+                // Only allow stage dragging when pan tool is active
+                if (activeTool !== 'pan') {
+                    return { x: canvas.panX, y: canvas.panY };
+                }
+                return pos;
+            }}
             onDragMove={(e) => {
-                // Update pan in real-time while dragging for smooth infinite canvas effect
-                setPan(e.target.x(), e.target.y());
+                // Only update pan if we're using the pan tool
+                if (activeTool === 'pan') {
+                    setPan(e.target.x(), e.target.y());
+                }
             }}
             onDragEnd={(e) => {
-                setPan(e.target.x(), e.target.y());
+                // Only update pan if we're using the pan tool
+                if (activeTool === 'pan') {
+                    setPan(e.target.x(), e.target.y());
+                }
             }}
             style={{ backgroundColor: '#E8E8E8', cursor: activeTool === 'pan' ? 'grab' : 'default' }}
         >

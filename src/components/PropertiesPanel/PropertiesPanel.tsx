@@ -25,12 +25,14 @@ import {
 } from 'lucide-react';
 
 import { useShapeStore } from '../../store';
+import { calculateChildPositions } from '../../engine/LayoutEngine';
 import type {
     LayoutMode,
     FlexDirection,
     FlexJustify,
     FlexAlign,
     FlexWrap,
+    Shape,
 } from '../../types';
 
 import './PropertiesPanel.css';
@@ -39,6 +41,7 @@ const PropertiesPanel: React.FC = () => {
     const selectedIds = useShapeStore((state) => state.selectedIds);
     const shapes = useShapeStore((state) => state.shapes);
     const updateShape = useShapeStore((state) => state.updateShape);
+    const batchUpdate = useShapeStore((state) => state.batchUpdate);
 
     // Get selected shapes
     const selectedShapes = Array.from(selectedIds)
@@ -55,6 +58,38 @@ const PropertiesPanel: React.FC = () => {
     const handleLayoutModeChange = useCallback(
         (mode: LayoutMode) => {
             if (!selectedFrame) return;
+
+            const currentMode = selectedFrame.layout?.mode;
+
+            // When switching from flex/grid to free, bake in the calculated positions
+            if (mode === 'free' && currentMode && currentMode !== 'free') {
+                // Get child shapes
+                const childShapes = selectedFrame.children
+                    .map((id) => shapes.get(id))
+                    .filter(Boolean) as Shape[];
+
+                if (childShapes.length > 0) {
+                    // Calculate current layout positions
+                    const layoutResult = calculateChildPositions(selectedFrame, childShapes);
+
+                    // Update children with their calculated positions
+                    const updates = childShapes.map((child) => {
+                        const pos = layoutResult.positions.get(child.id);
+                        return {
+                            id: child.id,
+                            changes: {
+                                x: pos?.x ?? child.x,
+                                y: pos?.y ?? child.y,
+                            },
+                        };
+                    });
+
+                    // Batch update all children positions
+                    batchUpdate(updates);
+                }
+            }
+
+            // Update the layout mode
             updateShape(selectedFrame.id, {
                 layout: {
                     ...selectedFrame.layout!,
@@ -62,7 +97,7 @@ const PropertiesPanel: React.FC = () => {
                 },
             });
         },
-        [selectedFrame, updateShape]
+        [selectedFrame, shapes, updateShape, batchUpdate]
     );
 
     const handleFlexDirectionChange = useCallback(

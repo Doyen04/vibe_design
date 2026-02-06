@@ -97,6 +97,8 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
 
         const handleDragStart = useCallback(
             (e: Konva.KonvaEventObject<DragEvent>) => {
+                // Only handle if this is the actual dragged node (not a bubbled event from child)
+                if (e.target !== groupRef.current) return;
                 e.cancelBubble = true;
                 onDragStart(shape.id);
             },
@@ -105,6 +107,8 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
 
         const handleDragMove = useCallback(
             (e: Konva.KonvaEventObject<DragEvent>) => {
+                // Only handle if this is the actual dragged node (not a bubbled event from child)
+                if (e.target !== groupRef.current) return;
                 e.cancelBubble = true;
                 const node = e.target;
                 // The node position is in parent's coordinate space
@@ -116,6 +120,8 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
 
         const handleDragEnd = useCallback(
             (e: Konva.KonvaEventObject<DragEvent>) => {
+                // Only handle if this is the actual dragged node (not a bubbled event from child)
+                if (e.target !== groupRef.current) return;
                 e.cancelBubble = true;
                 onDragEnd(shape.id);
             },
@@ -142,10 +148,10 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
         // Render layout indicator for frames with active layout
         const renderLayoutIndicator = () => {
             if (!hasLayout || !isSelected) return null;
-            
+
             const indicatorText = layoutMode === 'flex' ? '⟷ Flex' : '▦ Grid';
             const bgColor = layoutMode === 'flex' ? '#9C27B0' : '#FF9800';
-            
+
             return (
                 <>
                     <Rect
@@ -174,17 +180,17 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
             if (!isFrame || !shape.layout || shape.layout.mode !== 'grid' || !isSelected) {
                 return null;
             }
-            
+
             const grid = shape.layout.grid!;
             const { columns, rows, columnGap, rowGap, padding } = grid;
-            
+
             const availableWidth = shape.width - padding.left - padding.right;
             const availableHeight = shape.height - padding.top - padding.bottom;
             const cellWidth = (availableWidth - columnGap * (columns - 1)) / columns;
             const cellHeight = (availableHeight - rowGap * (rows - 1)) / rows;
-            
+
             const lines: React.ReactNode[] = [];
-            
+
             // Vertical lines
             for (let i = 1; i < columns; i++) {
                 const x = padding.left + i * (cellWidth + columnGap) - columnGap / 2;
@@ -199,7 +205,7 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
                     />
                 );
             }
-            
+
             // Horizontal lines
             for (let i = 1; i < rows; i++) {
                 const y = padding.top + i * (cellHeight + rowGap) - rowGap / 2;
@@ -214,7 +220,7 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
                     />
                 );
             }
-            
+
             return lines;
         };
 
@@ -278,7 +284,7 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
 
                     {/* Layout indicator for frames with layout */}
                     {renderLayoutIndicator()}
-                    
+
                     {/* Grid overlay for grid layout */}
                     {renderGridOverlay()}
 
@@ -291,10 +297,10 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
                     {childShapes.map((childShape) => {
                         const pos = getChildPosition(childShape);
                         // Create a modified shape with calculated layout position
-                        const effectiveShape = layoutPositions 
+                        const effectiveShape = layoutPositions
                             ? { ...childShape, x: pos.x, y: pos.y }
                             : childShape;
-                        
+
                         return (
                             <ShapeRenderer
                                 key={childShape.id}

@@ -87,7 +87,7 @@ export interface Shape {
     visible: boolean;
     locked: boolean;
     // For circles, width and height are treated as diameter
-    
+
     // Layout settings (only applicable for frames)
     layout?: LayoutSettings;
 }

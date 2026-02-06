@@ -37,6 +37,7 @@ interface ShapeState {
     nestShape: (childId: string, parentId: string) => void;
     unnestShape: (childId: string) => void;
     reorderShape: (id: string, newIndex: number) => void;
+    swapChildrenInParent: (parentId: string, childId1: string, childId2: string) => void;
 
     // Batch operations
     batchUpdate: (updates: { id: string; changes: Partial<Shape> }[]) => void;
@@ -141,7 +142,7 @@ export const useShapeStore = create<ShapeState>()(
 
             set((state) => {
                 const newShapes = new Map(state.shapes);
-                
+
                 // If the shape has a parent, convert world coordinates to relative coordinates
                 if (shape.parentId) {
                     const parent = state.shapes.get(shape.parentId);
@@ -151,7 +152,7 @@ export const useShapeStore = create<ShapeState>()(
                         shape.y = shape.y - parent.y;
                     }
                 }
-                
+
                 newShapes.set(shape.id, shape);
 
                 const newOrder = [...state.shapeOrder, shape.id];
@@ -305,12 +306,12 @@ export const useShapeStore = create<ShapeState>()(
                 if (!child || !newParent || childId === parentId) return state;
 
                 const newShapes = new Map(state.shapes);
-                
+
                 // Calculate the child's current world position
                 // If child was already nested, we need to convert from old parent's space to world first
                 let childWorldX = child.x;
                 let childWorldY = child.y;
-                
+
                 if (child.parentId) {
                     const oldParent = state.shapes.get(child.parentId);
                     if (oldParent) {
@@ -403,6 +404,31 @@ export const useShapeStore = create<ShapeState>()(
                 newOrder.splice(newIndex, 0, id);
 
                 return { shapeOrder: newOrder };
+            });
+        },
+
+        swapChildrenInParent: (parentId: string, childId1: string, childId2: string) => {
+            set((state) => {
+                const parent = state.shapes.get(parentId);
+                if (!parent) return state;
+
+                const idx1 = parent.children.indexOf(childId1);
+                const idx2 = parent.children.indexOf(childId2);
+
+                if (idx1 === -1 || idx2 === -1) return state;
+
+                // Swap children positions in the array
+                const newChildren = [...parent.children];
+                newChildren[idx1] = childId2;
+                newChildren[idx2] = childId1;
+
+                const newShapes = new Map(state.shapes);
+                newShapes.set(parentId, {
+                    ...parent,
+                    children: newChildren,
+                });
+
+                return { shapes: newShapes };
             });
         },
 
