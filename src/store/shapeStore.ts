@@ -37,7 +37,7 @@ interface ShapeState {
     nestShape: (childId: string, parentId: string) => void;
     unnestShape: (childId: string) => void;
     reorderShape: (id: string, newIndex: number) => void;
-    swapChildrenInParent: (parentId: string, childId1: string, childId2: string) => void;
+    reorderChildInParent: (parentId: string, childId: string, newIndex: number) => void;
 
     // Batch operations
     batchUpdate: (updates: { id: string; changes: Partial<Shape> }[]) => void;
@@ -407,20 +407,18 @@ export const useShapeStore = create<ShapeState>()(
             });
         },
 
-        swapChildrenInParent: (parentId: string, childId1: string, childId2: string) => {
+        reorderChildInParent: (parentId: string, childId: string, newIndex: number) => {
             set((state) => {
                 const parent = state.shapes.get(parentId);
                 if (!parent) return state;
 
-                const idx1 = parent.children.indexOf(childId1);
-                const idx2 = parent.children.indexOf(childId2);
+                const currentIndex = parent.children.indexOf(childId);
+                if (currentIndex === -1) return state;
 
-                if (idx1 === -1 || idx2 === -1) return state;
-
-                // Swap children positions in the array
+                // Remove from current position and insert at new position
                 const newChildren = [...parent.children];
-                newChildren[idx1] = childId2;
-                newChildren[idx2] = childId1;
+                newChildren.splice(currentIndex, 1);
+                newChildren.splice(newIndex, 0, childId);
 
                 const newShapes = new Map(state.shapes);
                 newShapes.set(parentId, {

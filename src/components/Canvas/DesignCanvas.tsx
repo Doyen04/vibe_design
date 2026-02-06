@@ -35,7 +35,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const clearSelection = useShapeStore((state) => state.clearSelection);
     const batchUpdate = useShapeStore((state) => state.batchUpdate);
     const nestShape = useShapeStore((state) => state.nestShape);
-    const swapChildrenInParent = useShapeStore((state) => state.swapChildrenInParent);
+    const reorderChildInParent = useShapeStore((state) => state.reorderChildInParent);
 
     // Canvas store
     const activeTool = useCanvasStore((state) => state.activeTool);
@@ -486,22 +486,373 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
             // Always read fresh state to avoid stale closures
             const currentShapes = useShapeStore.getState().shapes;
+            const unnestShape = useShapeStore.getState().unnestShape;
 
-            // Check if shape should be nested in a new parent
+            // Get the shape being dragged
             const shape = currentShapes.get(id);
             if (!shape) return;
 
-            const allShapes = Array.from(currentShapes.values());
-            const potentialParent = snapEngine.findPotentialParent(shape, allShapes);
+            // Calculate shape's world position for containment checks
+            let shapeWorldX = shape.x;
+            let shapeWorldY = shape.y;
+            if (shape.parentId) {
+                const currentParent = currentShapes.get(shape.parentId);
+                if (currentParent) {
+                    shapeWorldX = currentParent.x + shape.x;
+                    shapeWorldY = currentParent.y + shape.y;
+                }
+            }
 
+            // Create a temporary shape with world coordinates for parent finding
+            const shapeInWorldCoords: Shape = {
+                ...shape,
+                x: shapeWorldX,
+                y: shapeWorldY,
+            };
+
+            const allShapes = Array.from(currentShapes.values());
+            const potentialParent = snapEngine.findPotentialParent(shapeInWorldCoords, allShapes);
+
+            // Check if shape was dragged completely outside its current parent
+            if (shape.parentId) {
+                const currentParent = currentShapes.get(shape.parentId);
+                if (currentParent) {
+                    const isInsideCurrentParent = 
+                        shapeWorldX >= currentParent.x &&
+                        shapeWorldY >= currentParent.y &&
+                        shapeWorldX + shape.width <= currentParent.x + currentParent.width &&
+                        shapeWorldY + shape.height <= currentParent.y + currentParent.height;
+
+                    if (!isInsideCurrentParent) {
+                        // Shape was dragged out of its current parent
+                        // First, update the old parent's layout if it has one
+                        const oldParentHasLayout = currentParent.layout && currentParent.layout.mode !== 'free';
+
+                        if (!potentialParent) {
+                            // Shape is outside all frames - make it a root shape
+                            unnestShape(id);
+
+                            // Update old parent's remaining children layout if needed
+                            if (oldParentHasLayout) {
+                                requestAnimationFrame(() => {
+                                    const updatedShapes = useShapeStore.getState().shapes;
+                                    const oldParent = updatedShapes.get(currentParent.id);
+                                    if (!oldParent || !oldParent.layout || oldParent.layout.mode === 'free') return;
+
+                                    const remainingChildren = oldParent.children
+                                        .map((childId) => updatedShapes.get(childId))
+                                        .filter(Boolean) as Shape[];
+
+                                    if (remainingChildren.length > 0) {
+                                        const layoutResult = calculateChildPositions(oldParent, remainingChildren);
+                                        const updates = remainingChildren.map((child) => {
+                                            const pos = layoutResult.positions.get(child.id);
+                                            return {
+                                                id: child.id,
+                                                changes: { x: pos?.x ?? child.x, y: pos?.y ?? child.y },
+                                            };
+                                        });
+                                        if (updates.length > 0) batchUpdate(updates);
+                                    }
+                                });
+                            }
+                            generateSuggestions();
+                            return;
+                        } else if (potentialParent.id !== shape.parentId) {
+                            // Shape moved from one parent to another
+                            nestShape(id, potentialParent.id);
+
+                            // Apply layout to both old and new parent
+                            requestAnimationFrame(() => {
+                                const updatedShapes = useShapeStore.getState().shapes;
+                                const allUpdates: { id: string; changes: Partial<Shape> }[] = [];
+
+                                // Update old parent's remaining children layout
+                                if (oldParentHasLayout) {
+                                    const oldParent = updatedShapes.get(currentParent.id);
+                                    if (oldParent && oldParent.layout && oldParent.layout.mode !== 'free') {
+                                        const remainingChildren = oldParent.children
+                                            .map((childId) => updatedShapes.get(childId))
+                                            .filter(Boolean) as Shape[];
+                                        if (remainingChildren.length > 0) {
+                                            const layoutResult = calculateChildPositions(oldParent, remainingChildren);
+                                            remainingChildren.forEach((child) => {
+                                                const pos = layoutResult.positions.get(child.id);
+                                                if (pos) {
+                                                    allUpdates.push({
+                                                        id: child.id,
+                                                        changes: { x: pos.x, y: pos.y },
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+
+                                // Update new parent's children layout
+                                const newParent = updatedShapes.get(potentialParent.id);
+                                if (newParent && newParent.layout && newParent.layout.mode !== 'free') {
+                                    const newChildren = newParent.children
+                                        .map((childId) => updatedShapes.get(childId))
+                                        .filter(Boolean) as Shape[];
+                                    
+                                    if (newChildren.length > 0) {
+                                        const layoutResult = calculateChildPositions(newParent, newChildren);
+                                        newChildren.forEach((child) => {
+                                            const pos = layoutResult.positions.get(child.id);
+                                            if (pos) {
+                                                allUpdates.push({
+                                                    id: child.id,
+                                                    changes: { x: pos.x, y: pos.y },
+                                                });
+                                            }
+                                        });
+                                    }
+                                }
+
+                                if (allUpdates.length > 0) batchUpdate(allUpdates);
+                                generateSuggestions();
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Shape doesn't have a parent, check if it should be nested into a new one
             if (potentialParent && potentialParent.id !== shape.parentId) {
+                // Calculate insertion index based on drop position for flex/grid layouts
+                let insertionIndex = -1;
+                if (potentialParent.layout && potentialParent.layout.mode !== 'free') {
+                    const layout = potentialParent.layout;
+                    const existingChildren = potentialParent.children
+                        .map((childId) => currentShapes.get(childId))
+                        .filter(Boolean) as Shape[];
+
+                    // Convert drop position to parent-relative coordinates
+                    const relDropX = shapeWorldX - potentialParent.x + shape.width / 2;
+                    const relDropY = shapeWorldY - potentialParent.y + shape.height / 2;
+
+                    if (layout.mode === 'flex' && layout.flex) {
+                        const isFlexRow = layout.flex.direction === 'row' || layout.flex.direction === 'row-reverse';
+                        const padding = layout.flex.padding;
+                        const gap = layout.flex.gap;
+                        let pos = isFlexRow ? padding.left : padding.top;
+
+                        for (let i = 0; i < existingChildren.length; i++) {
+                            const child = existingChildren[i];
+                            const childSize = isFlexRow ? child.width : child.height;
+                            const slotMidpoint = pos + childSize / 2;
+                            const draggedMainPos = isFlexRow ? relDropX : relDropY;
+
+                            if (draggedMainPos < slotMidpoint) {
+                                insertionIndex = i;
+                                break;
+                            }
+                            pos += childSize + gap;
+                        }
+                        if (insertionIndex === -1) insertionIndex = existingChildren.length;
+                    } else if (layout.mode === 'grid' && layout.grid) {
+                        const padding = layout.grid.padding;
+                        const columns = layout.grid.columns;
+                        const columnGap = layout.grid.columnGap;
+                        const rowGap = layout.grid.rowGap;
+
+                        const availableWidth = potentialParent.width - padding.left - padding.right;
+                        const availableHeight = potentialParent.height - padding.top - padding.bottom;
+                        const numRows = Math.ceil((existingChildren.length + 1) / columns);
+                        const cellWidth = (availableWidth - columnGap * (columns - 1)) / columns;
+                        const cellHeight = (availableHeight - rowGap * (numRows - 1)) / numRows;
+
+                        const col = Math.max(0, Math.min(columns - 1, Math.floor((relDropX - padding.left) / (cellWidth + columnGap))));
+                        const row = Math.max(0, Math.floor((relDropY - padding.top) / (cellHeight + rowGap)));
+
+                        insertionIndex = Math.min(row * columns + col, existingChildren.length);
+                    }
+                }
+
+                // Nest the shape
                 nestShape(id, potentialParent.id);
+
+                // If we calculated an insertion index, reorder the children
+                if (insertionIndex >= 0 && insertionIndex < potentialParent.children.length) {
+                    // After nesting, the shape will be at the end of children array
+                    // We need to move it to the correct position
+                    requestAnimationFrame(() => {
+                        const updatedShapes = useShapeStore.getState().shapes;
+                        const newParent = updatedShapes.get(potentialParent.id);
+                        if (!newParent) return;
+
+                        // Reorder if needed (shape was added at the end)
+                        const currentIndex = newParent.children.indexOf(id);
+                        if (currentIndex !== insertionIndex && currentIndex !== -1) {
+                            reorderChildInParent(potentialParent.id, id, insertionIndex);
+                        }
+
+                        // Apply layout after reorder
+                        requestAnimationFrame(() => {
+                            const finalShapes = useShapeStore.getState().shapes;
+                            const finalParent = finalShapes.get(potentialParent.id);
+                            if (!finalParent || !finalParent.layout || finalParent.layout.mode === 'free') {
+                                generateSuggestions();
+                                return;
+                            }
+
+                            const finalChildren = finalParent.children
+                                .map((childId) => finalShapes.get(childId))
+                                .filter(Boolean) as Shape[];
+
+                            const layoutResult = calculateChildPositions(finalParent, finalChildren);
+                            const updates = finalChildren.map((child) => {
+                                const pos = layoutResult.positions.get(child.id);
+                                return {
+                                    id: child.id,
+                                    changes: { x: pos?.x ?? child.x, y: pos?.y ?? child.y },
+                                };
+                            });
+
+                            if (updates.length > 0) batchUpdate(updates);
+                            generateSuggestions();
+                        });
+                    });
+                } else {
+                    // Apply layout if the new parent has flex/grid
+                    requestAnimationFrame(() => {
+                        const updatedShapes = useShapeStore.getState().shapes;
+                        const newParent = updatedShapes.get(potentialParent.id);
+                        if (!newParent || !newParent.layout || newParent.layout.mode === 'free') {
+                            generateSuggestions();
+                            return;
+                        }
+
+                        const updatedChildren = newParent.children
+                            .map((childId) => updatedShapes.get(childId))
+                            .filter(Boolean) as Shape[];
+
+                        const layoutResult = calculateChildPositions(newParent, updatedChildren);
+                        const updates = updatedChildren.map((child) => {
+                            const pos = layoutResult.positions.get(child.id);
+                            return {
+                                id: child.id,
+                                changes: { x: pos?.x ?? child.x, y: pos?.y ?? child.y },
+                            };
+                        });
+
+                        if (updates.length > 0) batchUpdate(updates);
+                        generateSuggestions();
+                    });
+                }
+                return;
+            } else if (shape.parentId) {
+                // Check if we should reorder children in a flex/grid layout
+                const parent = currentShapes.get(shape.parentId);
+                if (parent && parent.layout && parent.layout.mode !== 'free') {
+                    const allChildren = parent.children
+                        .map((childId) => currentShapes.get(childId))
+                        .filter(Boolean) as Shape[];
+
+                    if (allChildren.length > 1) {
+                        // Find the dragged shape's current visual position (where user dropped it)
+                        const draggedCenterX = shape.x + shape.width / 2;
+                        const draggedCenterY = shape.y + shape.height / 2;
+
+                        const layout = parent.layout;
+                        const isFlexRow = layout.mode === 'flex' &&
+                            (layout.flex?.direction === 'row' || layout.flex?.direction === 'row-reverse');
+                        const isGrid = layout.mode === 'grid';
+
+                        // Calculate target index based on drop position
+                        let targetIndex = -1;
+                        const currentIndex = parent.children.indexOf(id);
+
+                        if (layout.mode === 'flex' && layout.flex) {
+                            const padding = layout.flex.padding;
+                            const gap = layout.flex.gap;
+
+                            // Calculate cumulative positions to find where the shape should go
+                            let pos = isFlexRow ? padding.left : padding.top;
+
+                            for (let i = 0; i < allChildren.length; i++) {
+                                const child = allChildren[i];
+                                const childSize = isFlexRow ? child.width : child.height;
+                                const slotMidpoint = pos + childSize / 2;
+                                const draggedMainPos = isFlexRow ? draggedCenterX : draggedCenterY;
+
+                                // If dragged before this slot's midpoint, insert here
+                                if (draggedMainPos < slotMidpoint && child.id !== id) {
+                                    targetIndex = i;
+                                    break;
+                                }
+
+                                pos += childSize + gap;
+                            }
+
+                            // If we didn't find a position, put at end
+                            if (targetIndex === -1) {
+                                targetIndex = allChildren.length - 1;
+                            }
+                        } else if (isGrid && layout.grid) {
+                            const padding = layout.grid.padding;
+                            const columns = layout.grid.columns;
+                            const columnGap = layout.grid.columnGap;
+                            const rowGap = layout.grid.rowGap;
+
+                            const availableWidth = parent.width - padding.left - padding.right;
+                            const availableHeight = parent.height - padding.top - padding.bottom;
+                            const cellWidth = (availableWidth - columnGap * (columns - 1)) / columns;
+                            const cellHeight = (availableHeight - rowGap * (Math.ceil(allChildren.length / columns) - 1)) / Math.ceil(allChildren.length / columns);
+
+                            // Calculate which grid cell the dragged shape center is in
+                            const relX = draggedCenterX - padding.left;
+                            const relY = draggedCenterY - padding.top;
+
+                            const col = Math.max(0, Math.min(columns - 1, Math.floor(relX / (cellWidth + columnGap))));
+                            const row = Math.max(0, Math.floor(relY / (cellHeight + rowGap)));
+
+                            targetIndex = Math.min(row * columns + col, allChildren.length - 1);
+                        }
+
+                        // Reorder if target is different from current position
+                        if (targetIndex !== -1 && targetIndex !== currentIndex) {
+                            reorderChildInParent(parent.id, id, targetIndex);
+                        }
+
+                        // After reorder, recalculate and apply layout positions
+                        requestAnimationFrame(() => {
+                            const updatedShapes = useShapeStore.getState().shapes;
+                            const updatedParent = updatedShapes.get(shape.parentId!);
+                            if (!updatedParent || !updatedParent.layout || updatedParent.layout.mode === 'free') return;
+
+                            const updatedChildren = updatedParent.children
+                                .map((childId) => updatedShapes.get(childId))
+                                .filter(Boolean) as Shape[];
+
+                            const newLayoutResult = calculateChildPositions(updatedParent, updatedChildren);
+
+                            // Update all children to their calculated layout positions
+                            const updates = updatedChildren.map((child) => {
+                                const pos = newLayoutResult.positions.get(child.id);
+                                return {
+                                    id: child.id,
+                                    changes: {
+                                        x: pos?.x ?? child.x,
+                                        y: pos?.y ?? child.y,
+                                    },
+                                };
+                            });
+
+                            if (updates.length > 0) {
+                                batchUpdate(updates);
+                            }
+                        });
+                    }
+                }
             }
 
             // Trigger AI suggestions after drag complete (layout pause)
             generateSuggestions();
         },
-        [setActiveGuides, nestShape, generateSuggestions]
+        [setActiveGuides, nestShape, reorderChildInParent, batchUpdate, generateSuggestions]
     );
 
     const handleTransformEnd = useCallback(

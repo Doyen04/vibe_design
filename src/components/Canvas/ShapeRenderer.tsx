@@ -75,6 +75,21 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
             return layoutPositions.positions.get(child.id) || { x: child.x, y: child.y };
         }, [layoutPositions]);
 
+        // Sync Konva Group position with shape props
+        // This is needed because Konva updates node position directly during drag,
+        // and we need to reset it when the shape's x/y changes from state updates
+        useEffect(() => {
+            if (groupRef.current) {
+                const node = groupRef.current;
+                // Only update if position differs (avoids unnecessary updates during drag)
+                if (node.x() !== shape.x || node.y() !== shape.y) {
+                    node.x(shape.x);
+                    node.y(shape.y);
+                    node.getLayer()?.batchDraw();
+                }
+            }
+        }, [shape.x, shape.y]);
+
         // Update transformer when selection changes or shape dimensions change
         useEffect(() => {
             if (isSelected && transformerRef.current && groupRef.current) {
