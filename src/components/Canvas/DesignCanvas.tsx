@@ -4,18 +4,18 @@
 // ============================================
 
 import React, { useCallback, useRef, useEffect, useMemo } from 'react';
-import { Stage, Layer, Rect } from 'react-konva';
+import { Stage, Layer } from 'react-konva';
 import type Konva from 'konva';
 import { debounce } from 'lodash';
 
 import { useShapeStore, useCanvasStore, useSuggestionStore } from '../../store';
-import { suggestionEngine, snapEngine, hierarchyManager } from '../../engine';
+import { suggestionEngine, snapEngine } from '../../engine';
 import type { Shape, ShapeCreateInput, Suggestion } from '../../types';
 
 import ShapeRenderer from './ShapeRenderer';
 import GhostShapeRenderer from './GhostShapeRenderer';
 import SnapGuidesRenderer from './SnapGuidesRenderer';
-import GridRenderer from './GridRenderer';
+import InfiniteCanvasBackground from './InfiniteCanvasBackground';
 
 interface DesignCanvasProps {
     width: number;
@@ -31,7 +31,6 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const selectedIds = useShapeStore((state) => state.selectedIds);
     const hoveredId = useShapeStore((state) => state.hoveredId);
     const addShape = useShapeStore((state) => state.addShape);
-    const updateShape = useShapeStore((state) => state.updateShape);
     const selectShape = useShapeStore((state) => state.selectShape);
     const clearSelection = useShapeStore((state) => state.clearSelection);
     const batchUpdate = useShapeStore((state) => state.batchUpdate);
@@ -50,7 +49,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const setDrawStartPoint = useCanvasStore((state) => state.setDrawStartPoint);
     const setPreviewShape = useCanvasStore((state) => state.setPreviewShape);
     const setActiveGuides = useCanvasStore((state) => state.setActiveGuides);
-    const setZoom = useCanvasStore((state) => state.setZoom);
+    const setZoomAtPoint = useCanvasStore((state) => state.setZoomAtPoint);
     const setPan = useCanvasStore((state) => state.setPan);
 
     // Suggestion store
@@ -68,11 +67,12 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     const llmEnabled = useSuggestionStore((state) => state.llmEnabled);
     const setLlmLoading = useSuggestionStore((state) => state.setLlmLoading);
 
-    // Get shapes array for rendering
-    const shapesArray = useMemo(() => {
+    // Get only ROOT shapes for rendering (shapes without parents)
+    // Children are rendered recursively inside their parent's Group by ShapeRenderer
+    const rootShapes = useMemo(() => {
         return shapeOrder
             .map((id) => shapes.get(id))
-            .filter(Boolean) as Shape[];
+            .filter((shape): shape is Shape => shape != null && shape.parentId === null);
     }, [shapes, shapeOrder]);
 
     // Generate suggestions (can be called with optional preview shape for real-time updates)
@@ -395,13 +395,12 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             const newScale = direction > 0 ? oldScale * 1.1 : oldScale / 1.1;
             const clampedScale = Math.max(0.1, Math.min(5, newScale));
 
-            setZoom(clampedScale);
-            setPan(
-                pointer.x - mousePointTo.x * clampedScale,
-                pointer.y - mousePointTo.y * clampedScale
-            );
+            // Atomic update of zoom and pan to prevent shapes from jumping
+            const newPanX = pointer.x - mousePointTo.x * clampedScale;
+            const newPanY = pointer.y - mousePointTo.y * clampedScale;
+            setZoomAtPoint(clampedScale, newPanX, newPanY);
         },
-        [canvas.zoom, canvas.panX, canvas.panY, setZoom, setPan]
+        [canvas.zoom, canvas.panX, canvas.panY, setZoomAtPoint]
     );
 
     // Shape interaction handlers
@@ -423,15 +422,34 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
     const handleShapeDragMove = useCallback(
         (id: string, x: number, y: number) => {
-            const shape = shapes.get(id);
+            // x, y are already in the correct coordinate space (relative to parent)
+            // Because Konva Groups handle transforms, we just need to update the shape's position
+
+            const currentShapes = useShapeStore.getState().shapes;
+            const shape = currentShapes.get(id);
             if (!shape) return;
 
-            // Calculate snap
-            const otherShapes = Array.from(shapes.values()).filter((s) => s.id !== id);
+            // For snapping, we need to work in world coordinates
+            // If shape has a parent, convert to world coordinates for snap calculation
+            let worldX = x;
+            let worldY = y;
+
+            if (shape.parentId) {
+                const parent = currentShapes.get(shape.parentId);
+                if (parent) {
+                    // Convert local to world (simplified - doesn't account for rotation)
+                    // For full rotation support, use hierarchyManager.localToWorld
+                    worldX = parent.x + x;
+                    worldY = parent.y + y;
+                }
+            }
+
+            // Calculate snap in world coordinates
+            const otherShapes = Array.from(currentShapes.values()).filter((s) => s.id !== id);
             const snapResult = snapEngine.snapShape(
-                shape,
-                x,
-                y,
+                { ...shape, x: worldX, y: worldY },
+                worldX,
+                worldY,
                 otherShapes,
                 canvas.width,
                 canvas.height
@@ -439,37 +457,37 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
 
             setActiveGuides(snapResult.guides);
 
-            // Update shape and its descendants
-            const deltaX = snapResult.snappedX - shape.x;
-            const deltaY = snapResult.snappedY - shape.y;
+            // Convert snapped position back to local coordinates if needed
+            let finalX = snapResult.snappedX;
+            let finalY = snapResult.snappedY;
 
-            const descendantUpdates = hierarchyManager.getDescendantUpdates(
-                id,
-                deltaX,
-                deltaY,
-                shapes
-            );
+            if (shape.parentId) {
+                const parent = currentShapes.get(shape.parentId);
+                if (parent) {
+                    finalX = snapResult.snappedX - parent.x;
+                    finalY = snapResult.snappedY - parent.y;
+                }
+            }
 
-            batchUpdate([
-                { id, changes: { x: snapResult.snappedX, y: snapResult.snappedY } },
-                ...descendantUpdates.map((u: { id: string; x: number; y: number }) => ({
-                    id: u.id,
-                    changes: { x: u.x, y: u.y },
-                })),
-            ]);
+            // With relative coordinates, we only need to update this shape
+            // Children automatically move with parent because they're rendered inside parent's Group
+            batchUpdate([{ id, changes: { x: finalX, y: finalY } }]);
         },
-        [shapes, canvas.width, canvas.height, setActiveGuides, batchUpdate]
+        [canvas.width, canvas.height, setActiveGuides, batchUpdate]
     );
 
     const handleShapeDragEnd = useCallback(
         (id: string) => {
             setActiveGuides([]);
 
+            // Always read fresh state to avoid stale closures
+            const currentShapes = useShapeStore.getState().shapes;
+
             // Check if shape should be nested in a new parent
-            const shape = shapes.get(id);
+            const shape = currentShapes.get(id);
             if (!shape) return;
 
-            const allShapes = Array.from(shapes.values());
+            const allShapes = Array.from(currentShapes.values());
             const potentialParent = snapEngine.findPotentialParent(shape, allShapes);
 
             if (potentialParent && potentialParent.id !== shape.parentId) {
@@ -479,7 +497,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             // Trigger AI suggestions after drag complete (layout pause)
             generateSuggestions();
         },
-        [shapes, setActiveGuides, nestShape, generateSuggestions]
+        [setActiveGuides, nestShape, generateSuggestions]
     );
 
     const handleTransformEnd = useCallback(
@@ -487,25 +505,47 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
 
-            // Reset scale and apply to width/height
+            // Always read fresh state to avoid stale closures
+            const currentShapes = useShapeStore.getState().shapes;
+            const shape = currentShapes.get(id);
+            if (!shape) return;
+
+            // Calculate new dimensions from scale
+            const newWidth = Math.max(10, shape.width * scaleX);
+            const newHeight = Math.max(10, shape.height * scaleY);
+            const newRotation = node.rotation();
+            const newX = node.x();
+            const newY = node.y();
+
+            // Reset scale BEFORE updating state (Konva applies scale temporarily during transform)
+            // This ensures the node is in a clean state when React re-renders with new dimensions
             node.scaleX(1);
             node.scaleY(1);
 
-            const shape = shapes.get(id);
-            if (!shape) return;
+            // With relative coordinates and nested Konva Groups:
+            // - Children automatically inherit parent's transform
+            // - We only need to update the shape that was transformed
+            // - Child shapes maintain their relative positions automatically
+            batchUpdate([
+                {
+                    id,
+                    changes: {
+                        x: newX,
+                        y: newY,
+                        width: newWidth,
+                        height: newHeight,
+                        rotation: newRotation,
+                    },
+                },
+            ]);
 
-            updateShape(id, {
-                x: node.x(),
-                y: node.y(),
-                width: Math.max(10, shape.width * scaleX),
-                height: Math.max(10, shape.height * scaleY),
-                rotation: node.rotation(),
-            });
+            // Force a layer redraw to sync visual state
+            node.getLayer()?.batchDraw();
 
             // Trigger AI suggestions after resize complete
             generateSuggestions();
         },
-        [shapes, updateShape, generateSuggestions]
+        [batchUpdate, generateSuggestions]
     );
 
     return (
@@ -522,34 +562,29 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             x={canvas.panX}
             y={canvas.panY}
             draggable={activeTool === 'pan'}
+            onDragMove={(e) => {
+                // Update pan in real-time while dragging for smooth infinite canvas effect
+                setPan(e.target.x(), e.target.y());
+            }}
             onDragEnd={(e) => {
                 setPan(e.target.x(), e.target.y());
             }}
             style={{ backgroundColor: '#E8E8E8', cursor: activeTool === 'pan' ? 'grab' : 'default' }}
         >
             <Layer>
-                {/* Infinite canvas background pattern */}
-                <Rect
-                    x={-10000}
-                    y={-10000}
-                    width={20000}
-                    height={20000}
-                    fill="#F5F5F5"
-                    listening={true}
-                />
-
-                {/* Grid - now covers infinite area */}
-                <GridRenderer
-                    width={20000}
-                    height={20000}
+                {/* True infinite canvas background with dynamic grid */}
+                <InfiniteCanvasBackground
+                    viewportWidth={width}
+                    viewportHeight={height}
+                    zoom={canvas.zoom}
+                    panX={canvas.panX}
+                    panY={canvas.panY}
                     gridSize={gridSize}
-                    visible={showGrid}
-                    offsetX={-10000}
-                    offsetY={-10000}
+                    showGrid={showGrid}
                 />
 
-                {/* Shapes */}
-                {shapesArray.map((shape) => (
+                {/* Root Shapes - children are rendered recursively inside parent Groups */}
+                {rootShapes.map((shape) => (
                     <ShapeRenderer
                         key={shape.id}
                         shape={shape}

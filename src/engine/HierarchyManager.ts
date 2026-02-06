@@ -259,6 +259,320 @@ export class HierarchyManager {
             y: relativeY + parent.y,
         };
     }
+
+    /**
+     * Rotate a point around a center point
+     */
+    rotatePoint(
+        px: number,
+        py: number,
+        cx: number,
+        cy: number,
+        angleDeg: number
+    ): { x: number; y: number } {
+        const angleRad = (angleDeg * Math.PI) / 180;
+        const cos = Math.cos(angleRad);
+        const sin = Math.sin(angleRad);
+        
+        const dx = px - cx;
+        const dy = py - cy;
+        
+        return {
+            x: cx + dx * cos - dy * sin,
+            y: cy + dx * sin + dy * cos,
+        };
+    }
+
+    /**
+     * Get the center point of a shape
+     */
+    getShapeCenter(shape: Shape): { x: number; y: number } {
+        return {
+            x: shape.x + shape.width / 2,
+            y: shape.y + shape.height / 2,
+        };
+    }
+
+    /**
+     * Update positions of all descendants when parent rotates
+     * Children rotate around the parent's center while maintaining relative position
+     */
+    getDescendantRotationUpdates(
+        parentId: string,
+        deltaRotation: number,
+        parentCenterX: number,
+        parentCenterY: number,
+        shapes: Map<string, Shape>
+    ): { id: string; x: number; y: number; rotation: number }[] {
+        const updates: { id: string; x: number; y: number; rotation: number }[] = [];
+        const descendants = this.getDescendants(parentId, shapes);
+
+        for (const descendant of descendants) {
+            // Get the center of the descendant shape
+            const childCenter = this.getShapeCenter(descendant);
+            
+            // Rotate the child's center around the parent's center
+            const rotatedCenter = this.rotatePoint(
+                childCenter.x,
+                childCenter.y,
+                parentCenterX,
+                parentCenterY,
+                deltaRotation
+            );
+            
+            // Calculate new top-left position from the rotated center
+            const newX = rotatedCenter.x - descendant.width / 2;
+            const newY = rotatedCenter.y - descendant.height / 2;
+            
+            // Also update the child's own rotation
+            const newRotation = descendant.rotation + deltaRotation;
+
+            updates.push({
+                id: descendant.id,
+                x: newX,
+                y: newY,
+                rotation: newRotation,
+            });
+        }
+
+        return updates;
+    }
+
+    /**
+     * Get combined transform updates for descendants when parent moves and/or rotates
+     */
+    getDescendantTransformUpdates(
+        parentId: string,
+        deltaX: number,
+        deltaY: number,
+        deltaRotation: number,
+        parentCenterX: number,
+        parentCenterY: number,
+        shapes: Map<string, Shape>
+    ): { id: string; x: number; y: number; rotation: number }[] {
+        const updates: { id: string; x: number; y: number; rotation: number }[] = [];
+        const descendants = this.getDescendants(parentId, shapes);
+
+        for (const descendant of descendants) {
+            let newX = descendant.x;
+            let newY = descendant.y;
+            let newRotation = descendant.rotation;
+
+            // First apply translation
+            newX += deltaX;
+            newY += deltaY;
+
+            // Then apply rotation around the new parent center (after translation)
+            if (deltaRotation !== 0) {
+                const newParentCenterX = parentCenterX + deltaX;
+                const newParentCenterY = parentCenterY + deltaY;
+                
+                // Get the center of the descendant shape after translation
+                const childCenterX = newX + descendant.width / 2;
+                const childCenterY = newY + descendant.height / 2;
+                
+                // Rotate the child's center around the parent's center
+                const rotatedCenter = this.rotatePoint(
+                    childCenterX,
+                    childCenterY,
+                    newParentCenterX,
+                    newParentCenterY,
+                    deltaRotation
+                );
+                
+                // Calculate new top-left position from the rotated center
+                newX = rotatedCenter.x - descendant.width / 2;
+                newY = rotatedCenter.y - descendant.height / 2;
+                
+                // Also update the child's own rotation
+                newRotation += deltaRotation;
+            }
+
+            updates.push({
+                id: descendant.id,
+                x: newX,
+                y: newY,
+                rotation: newRotation,
+            });
+        }
+
+        return updates;
+    }
+
+    /**
+     * Convert a point from world coordinates to parent's local coordinates
+     * accounting for parent's rotation
+     */
+    worldToLocal(
+        worldX: number,
+        worldY: number,
+        parent: Shape
+    ): { x: number; y: number } {
+        const parentCenterX = parent.x + parent.width / 2;
+        const parentCenterY = parent.y + parent.height / 2;
+        
+        // Rotate point around parent center by negative parent rotation
+        const rotated = this.rotatePoint(
+            worldX,
+            worldY,
+            parentCenterX,
+            parentCenterY,
+            -parent.rotation
+        );
+        
+        // Convert to local coordinates (relative to parent's top-left in local space)
+        return {
+            x: rotated.x - parent.x,
+            y: rotated.y - parent.y,
+        };
+    }
+
+    /**
+     * Convert a point from parent's local coordinates to world coordinates
+     * accounting for parent's rotation
+     */
+    localToWorld(
+        localX: number,
+        localY: number,
+        parent: Shape
+    ): { x: number; y: number } {
+        // First convert to absolute position (before rotation)
+        const absX = parent.x + localX;
+        const absY = parent.y + localY;
+        
+        const parentCenterX = parent.x + parent.width / 2;
+        const parentCenterY = parent.y + parent.height / 2;
+        
+        // Rotate point around parent center by parent rotation
+        return this.rotatePoint(
+            absX,
+            absY,
+            parentCenterX,
+            parentCenterY,
+            parent.rotation
+        );
+    }
+
+    /**
+     * Get descendant updates when parent is resized while rotated
+     * This properly handles the case where a rotated parent changes size
+     */
+    getDescendantResizeUpdates(
+        parentId: string,
+        oldParent: Shape,
+        newParent: { x: number; y: number; width: number; height: number; rotation: number },
+        shapes: Map<string, Shape>
+    ): { id: string; x: number; y: number; rotation: number }[] {
+        const updates: { id: string; x: number; y: number; rotation: number }[] = [];
+        const descendants = this.getDescendants(parentId, shapes);
+
+        // Calculate old and new parent centers
+        const oldCenterX = oldParent.x + oldParent.width / 2;
+        const oldCenterY = oldParent.y + oldParent.height / 2;
+        const newCenterX = newParent.x + newParent.width / 2;
+        const newCenterY = newParent.y + newParent.height / 2;
+
+        // Delta rotation
+        const deltaRotation = newParent.rotation - oldParent.rotation;
+
+        for (const descendant of descendants) {
+            // Get child's center in world coordinates
+            const childCenterX = descendant.x + descendant.width / 2;
+            const childCenterY = descendant.y + descendant.height / 2;
+
+            // Convert child center to parent's local coordinate system
+            // First rotate around old parent center to undo parent's rotation
+            const localChild = this.rotatePoint(
+                childCenterX,
+                childCenterY,
+                oldCenterX,
+                oldCenterY,
+                -oldParent.rotation
+            );
+
+            // Calculate relative position as fraction of parent size
+            const relativeX = (localChild.x - oldParent.x) / oldParent.width;
+            const relativeY = (localChild.y - oldParent.y) / oldParent.height;
+
+            // Apply same relative position to new parent size
+            const newLocalX = newParent.x + relativeX * newParent.width;
+            const newLocalY = newParent.y + relativeY * newParent.height;
+
+            // Rotate back to world coordinates using new parent center and rotation
+            const newWorldPos = this.rotatePoint(
+                newLocalX,
+                newLocalY,
+                newCenterX,
+                newCenterY,
+                newParent.rotation
+            );
+
+            // Calculate new top-left from center
+            const newX = newWorldPos.x - descendant.width / 2;
+            const newY = newWorldPos.y - descendant.height / 2;
+
+            // Update child rotation by delta
+            const newRotation = descendant.rotation + deltaRotation;
+
+            updates.push({
+                id: descendant.id,
+                x: newX,
+                y: newY,
+                rotation: newRotation,
+            });
+        }
+
+        return updates;
+    }
+
+    /**
+     * Calculate the world (absolute) transform for a shape considering all parent transforms
+     * This is useful for rendering children with inherited transforms
+     */
+    getWorldTransform(
+        shapeId: string,
+        shapes: Map<string, Shape>
+    ): { x: number; y: number; rotation: number; scaleX: number; scaleY: number } {
+        const shape = shapes.get(shapeId);
+        if (!shape) {
+            return { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
+        }
+
+        // Get all ancestors from bottom to top
+        const ancestors = this.getAncestors(shapeId, shapes).reverse();
+        
+        // Start with identity transform
+        let worldX = shape.x;
+        let worldY = shape.y;
+        let worldRotation = shape.rotation;
+
+        // Apply each ancestor's transform
+        for (const ancestor of ancestors) {
+            // Rotate around ancestor's center
+            if (ancestor.rotation !== 0) {
+                const ancestorCenter = this.getShapeCenter(ancestor);
+                const shapeCenter = { x: worldX + shape.width / 2, y: worldY + shape.height / 2 };
+                const rotated = this.rotatePoint(
+                    shapeCenter.x,
+                    shapeCenter.y,
+                    ancestorCenter.x,
+                    ancestorCenter.y,
+                    ancestor.rotation
+                );
+                worldX = rotated.x - shape.width / 2;
+                worldY = rotated.y - shape.height / 2;
+                worldRotation += ancestor.rotation;
+            }
+        }
+
+        return {
+            x: worldX,
+            y: worldY,
+            rotation: worldRotation,
+            scaleX: 1,
+            scaleY: 1,
+        };
+    }
 }
 
 // Export singleton

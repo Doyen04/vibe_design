@@ -100,16 +100,29 @@ export const useShapeStore = create<ShapeState>()(
         historyIndex: -1,
 
         // Add a new shape
+        // Note: If parentId is provided, the x/y coordinates are assumed to be in WORLD coordinates
+        // and will be converted to relative (local) coordinates
         addShape: (input: ShapeCreateInput) => {
             const shape = createDefaultShape(input);
 
             set((state) => {
                 const newShapes = new Map(state.shapes);
+                
+                // If the shape has a parent, convert world coordinates to relative coordinates
+                if (shape.parentId) {
+                    const parent = state.shapes.get(shape.parentId);
+                    if (parent) {
+                        // Convert from world to local coordinates
+                        shape.x = shape.x - parent.x;
+                        shape.y = shape.y - parent.y;
+                    }
+                }
+                
                 newShapes.set(shape.id, shape);
 
                 const newOrder = [...state.shapeOrder, shape.id];
 
-                // Update parent if nested
+                // Update parent's children array if nested
                 if (shape.parentId) {
                     const parent = newShapes.get(shape.parentId);
                     if (parent) {
@@ -250,6 +263,7 @@ export const useShapeStore = create<ShapeState>()(
         },
 
         // Hierarchy actions
+        // When nesting, we convert child's world coordinates to relative coordinates (relative to parent)
         nestShape: (childId: string, parentId: string) => {
             set((state) => {
                 const child = state.shapes.get(childId);
@@ -257,8 +271,23 @@ export const useShapeStore = create<ShapeState>()(
                 if (!child || !newParent || childId === parentId) return state;
 
                 const newShapes = new Map(state.shapes);
+                
+                // Calculate the child's current world position
+                // If child was already nested, we need to convert from old parent's space to world first
+                let childWorldX = child.x;
+                let childWorldY = child.y;
+                
+                if (child.parentId) {
+                    const oldParent = state.shapes.get(child.parentId);
+                    if (oldParent) {
+                        // Convert from old parent's local space to world space
+                        // Note: For full rotation support, this would need matrix transforms
+                        childWorldX = oldParent.x + child.x;
+                        childWorldY = oldParent.y + child.y;
+                    }
+                }
 
-                // Remove from old parent
+                // Remove from old parent's children array
                 if (child.parentId) {
                     const oldParent = newShapes.get(child.parentId);
                     if (oldParent) {
@@ -269,22 +298,29 @@ export const useShapeStore = create<ShapeState>()(
                     }
                 }
 
-                // Add to new parent
+                // Convert child's world coordinates to new parent's local coordinates
+                const relativeX = childWorldX - newParent.x;
+                const relativeY = childWorldY - newParent.y;
+
+                // Add to new parent's children array
                 newShapes.set(parentId, {
                     ...newParent,
                     children: [...newParent.children, childId],
                 });
 
-                // Update child's parentId
+                // Update child with relative coordinates and new parentId
                 newShapes.set(childId, {
                     ...child,
                     parentId,
+                    x: relativeX,
+                    y: relativeY,
                 });
 
                 return { shapes: newShapes };
             });
         },
 
+        // When unnesting, we convert child's relative coordinates back to world coordinates
         unnestShape: (childId: string) => {
             set((state) => {
                 const child = state.shapes.get(childId);
@@ -294,16 +330,30 @@ export const useShapeStore = create<ShapeState>()(
                 const parent = newShapes.get(child.parentId);
 
                 if (parent) {
+                    // Convert child's relative coordinates to world coordinates
+                    const worldX = parent.x + child.x;
+                    const worldY = parent.y + child.y;
+
+                    // Remove from parent's children array
                     newShapes.set(parent.id, {
                         ...parent,
                         children: parent.children.filter((id) => id !== childId),
                     });
-                }
 
-                newShapes.set(childId, {
-                    ...child,
-                    parentId: null,
-                });
+                    // Update child with world coordinates and null parentId
+                    newShapes.set(childId, {
+                        ...child,
+                        parentId: null,
+                        x: worldX,
+                        y: worldY,
+                    });
+                } else {
+                    // Parent not found, just remove the parentId
+                    newShapes.set(childId, {
+                        ...child,
+                        parentId: null,
+                    });
+                }
 
                 return { shapes: newShapes };
             });

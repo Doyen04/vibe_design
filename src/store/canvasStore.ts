@@ -14,6 +14,7 @@ interface CanvasStoreState {
     canvas: CanvasState;
     setZoom: (zoom: number) => void;
     setPan: (x: number, y: number) => void;
+    setZoomAtPoint: (zoom: number, panX: number, panY: number) => void;
     setCanvasSize: (width: number, height: number) => void;
     resetView: () => void;
 
@@ -78,6 +79,16 @@ export const useCanvasStore = create<CanvasStoreState>((set) => ({
     setPan: (panX, panY) =>
         set((state) => ({
             canvas: { ...state.canvas, panX, panY },
+        })),
+    // Atomic zoom + pan update to prevent jumping during zoom
+    setZoomAtPoint: (zoom, panX, panY) =>
+        set((state) => ({
+            canvas: { 
+                ...state.canvas, 
+                zoom: Math.max(0.1, Math.min(5, zoom)),
+                panX,
+                panY,
+            },
         })),
     setCanvasSize: (width, height) =>
         set((state) => ({
