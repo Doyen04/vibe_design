@@ -818,7 +818,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                             const cellStartX = col * (cellWidth + columnGap);
                             const cellStartY = row * (cellHeight + rowGap);
                             const isInsideCell = relX >= cellStartX && relX < cellStartX + cellWidth &&
-                                                 relY >= cellStartY && relY < cellStartY + cellHeight;
+                                relY >= cellStartY && relY < cellStartY + cellHeight;
 
                             if (isInsideCell && col < columns && row < numRows) {
                                 const cellIndex = row * columns + col;
