@@ -24,7 +24,7 @@ interface ShapeRendererProps {
     onSelect: (id: string, addToSelection: boolean) => void;
     onDragStart: (id: string) => void;
     onDragMove: (id: string, x: number, y: number) => void;
-    onDragEnd: (id: string) => void;
+    onDragEnd: (id: string, mouseX: number, mouseY: number) => void;
     onTransformEnd: (id: string, node: Konva.Node) => void;
 }
 
@@ -138,7 +138,15 @@ const ShapeRenderer: React.FC<ShapeRendererProps> = memo(
                 // Only handle if this is the actual dragged node (not a bubbled event from child)
                 if (e.target !== groupRef.current) return;
                 e.cancelBubble = true;
-                onDragEnd(shape.id);
+                // Get mouse position in stage coordinates
+                const stage = e.target.getStage();
+                const pointerPos = stage?.getPointerPosition();
+                const stagePos = stage?.position() ?? { x: 0, y: 0 };
+                const scale = stage?.scaleX() ?? 1;
+                // Convert screen position to canvas world coordinates
+                const mouseX = pointerPos ? (pointerPos.x - stagePos.x) / scale : 0;
+                const mouseY = pointerPos ? (pointerPos.y - stagePos.y) / scale : 0;
+                onDragEnd(shape.id, mouseX, mouseY);
             },
             [shape.id, onDragEnd]
         );

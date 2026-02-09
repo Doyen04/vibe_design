@@ -481,7 +481,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
     );
 
     const handleShapeDragEnd = useCallback(
-        (id: string) => {
+        (id: string, mouseX: number, mouseY: number) => {
             setActiveGuides([]);
 
             // Always read fresh state to avoid stale closures
@@ -517,7 +517,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
             if (shape.parentId) {
                 const currentParent = currentShapes.get(shape.parentId);
                 if (currentParent) {
-                    const isInsideCurrentParent = 
+                    const isInsideCurrentParent =
                         shapeWorldX >= currentParent.x &&
                         shapeWorldY >= currentParent.y &&
                         shapeWorldX + shape.width <= currentParent.x + currentParent.width &&
@@ -595,7 +595,7 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                                     const newChildren = newParent.children
                                         .map((childId) => updatedShapes.get(childId))
                                         .filter(Boolean) as Shape[];
-                                    
+
                                     if (newChildren.length > 0) {
                                         const layoutResult = calculateChildPositions(newParent, newChildren);
                                         newChildren.forEach((child) => {
@@ -751,100 +751,125 @@ const DesignCanvas: React.FC<DesignCanvasProps> = ({ width, height }) => {
                         .map((childId) => currentShapes.get(childId))
                         .filter(Boolean) as Shape[];
 
-                    if (allChildren.length > 1) {
-                        // Find the dragged shape's current visual position (where user dropped it)
-                        const draggedCenterX = shape.x + shape.width / 2;
-                        const draggedCenterY = shape.y + shape.height / 2;
+                    // Convert mouse position to parent-relative coordinates
+                    const relMouseX = mouseX - parent.x;
+                    const relMouseY = mouseY - parent.y;
 
-                        const layout = parent.layout;
-                        const isFlexRow = layout.mode === 'flex' &&
-                            (layout.flex?.direction === 'row' || layout.flex?.direction === 'row-reverse');
-                        const isGrid = layout.mode === 'grid';
+                    const layout = parent.layout;
+                    const currentIndex = parent.children.indexOf(id);
+                    let targetIndex = -1;
 
-                        // Calculate target index based on drop position
-                        let targetIndex = -1;
-                        const currentIndex = parent.children.indexOf(id);
+                    if (layout.mode === 'flex' && layout.flex) {
+                        const padding = layout.flex.padding;
+                        const gap = layout.flex.gap;
+                        const isFlexRow = layout.flex.direction === 'row' || layout.flex.direction === 'row-reverse';
 
-                        if (layout.mode === 'flex' && layout.flex) {
-                            const padding = layout.flex.padding;
-                            const gap = layout.flex.gap;
+                        // Calculate slot positions and check if mouse is inside each slot
+                        let pos = isFlexRow ? padding.left : padding.top;
 
-                            // Calculate cumulative positions to find where the shape should go
-                            let pos = isFlexRow ? padding.left : padding.top;
+                        for (let i = 0; i < allChildren.length; i++) {
+                            const child = allChildren[i];
+                            if (child.id === id) {
+                                pos += (isFlexRow ? child.width : child.height) + gap;
+                                continue;
+                            }
 
-                            for (let i = 0; i < allChildren.length; i++) {
-                                const child = allChildren[i];
-                                const childSize = isFlexRow ? child.width : child.height;
-                                const slotMidpoint = pos + childSize / 2;
-                                const draggedMainPos = isFlexRow ? draggedCenterX : draggedCenterY;
+                            const childSize = isFlexRow ? child.width : child.height;
+                            const slotStart = pos;
+                            const slotEnd = pos + childSize;
 
-                                // If dragged before this slot's midpoint, insert here
-                                if (draggedMainPos < slotMidpoint && child.id !== id) {
-                                    targetIndex = i;
-                                    break;
+                            // Check if mouse is inside this slot's bounds
+                            const mouseMainPos = isFlexRow ? relMouseX : relMouseY;
+                            const mouseCrossPos = isFlexRow ? relMouseY : relMouseX;
+                            const crossStart = isFlexRow ? padding.top : padding.left;
+                            const crossEnd = isFlexRow ? parent.height - padding.bottom : parent.width - padding.right;
+
+                            if (mouseMainPos >= slotStart && mouseMainPos < slotEnd &&
+                                mouseCrossPos >= crossStart && mouseCrossPos < crossEnd) {
+                                // Mouse is inside this slot - swap with this shape
+                                targetIndex = i;
+                                break;
+                            }
+
+                            pos += childSize + gap;
+                        }
+                    } else if (layout.mode === 'grid' && layout.grid) {
+                        const padding = layout.grid.padding;
+                        const columns = layout.grid.columns;
+                        const columnGap = layout.grid.columnGap;
+                        const rowGap = layout.grid.rowGap;
+
+                        const availableWidth = parent.width - padding.left - padding.right;
+                        const numRows = Math.ceil(allChildren.length / columns);
+                        const availableHeight = parent.height - padding.top - padding.bottom;
+                        const cellWidth = (availableWidth - columnGap * (columns - 1)) / columns;
+                        const cellHeight = (availableHeight - rowGap * (numRows - 1)) / numRows;
+
+                        // Calculate which grid cell the mouse is in
+                        const relX = relMouseX - padding.left;
+                        const relY = relMouseY - padding.top;
+
+                        // Check if mouse is within the grid bounds
+                        if (relX >= 0 && relX < availableWidth && relY >= 0 && relY < availableHeight) {
+                            const col = Math.floor(relX / (cellWidth + columnGap));
+                            const row = Math.floor(relY / (cellHeight + rowGap));
+
+                            // Check if mouse is actually inside a cell (not in the gap)
+                            const cellStartX = col * (cellWidth + columnGap);
+                            const cellStartY = row * (cellHeight + rowGap);
+                            const isInsideCell = relX >= cellStartX && relX < cellStartX + cellWidth &&
+                                                 relY >= cellStartY && relY < cellStartY + cellHeight;
+
+                            if (isInsideCell && col < columns && row < numRows) {
+                                const cellIndex = row * columns + col;
+                                // Only target if there's a shape in that cell and it's not the dragged shape
+                                if (cellIndex < allChildren.length && allChildren[cellIndex].id !== id) {
+                                    targetIndex = cellIndex;
                                 }
-
-                                pos += childSize + gap;
                             }
-
-                            // If we didn't find a position, put at end
-                            if (targetIndex === -1) {
-                                targetIndex = allChildren.length - 1;
-                            }
-                        } else if (isGrid && layout.grid) {
-                            const padding = layout.grid.padding;
-                            const columns = layout.grid.columns;
-                            const columnGap = layout.grid.columnGap;
-                            const rowGap = layout.grid.rowGap;
-
-                            const availableWidth = parent.width - padding.left - padding.right;
-                            const availableHeight = parent.height - padding.top - padding.bottom;
-                            const cellWidth = (availableWidth - columnGap * (columns - 1)) / columns;
-                            const cellHeight = (availableHeight - rowGap * (Math.ceil(allChildren.length / columns) - 1)) / Math.ceil(allChildren.length / columns);
-
-                            // Calculate which grid cell the dragged shape center is in
-                            const relX = draggedCenterX - padding.left;
-                            const relY = draggedCenterY - padding.top;
-
-                            const col = Math.max(0, Math.min(columns - 1, Math.floor(relX / (cellWidth + columnGap))));
-                            const row = Math.max(0, Math.floor(relY / (cellHeight + rowGap)));
-
-                            targetIndex = Math.min(row * columns + col, allChildren.length - 1);
                         }
+                    }
 
-                        // Reorder if target is different from current position
-                        if (targetIndex !== -1 && targetIndex !== currentIndex) {
-                            reorderChildInParent(parent.id, id, targetIndex);
-                        }
+                    // Reorder if mouse is inside another shape's slot
+                    if (targetIndex !== -1 && targetIndex !== currentIndex) {
+                        reorderChildInParent(parent.id, id, targetIndex);
+                    }
 
-                        // After reorder, recalculate and apply layout positions
-                        requestAnimationFrame(() => {
-                            const updatedShapes = useShapeStore.getState().shapes;
-                            const updatedParent = updatedShapes.get(shape.parentId!);
-                            if (!updatedParent || !updatedParent.layout || updatedParent.layout.mode === 'free') return;
+                    // Always recalculate and apply layout positions for ALL children after any drag
+                    // This ensures all children snap back to their correct layout positions
+                    const applyLayoutPositions = () => {
+                        const updatedShapes = useShapeStore.getState().shapes;
+                        const updatedParent = updatedShapes.get(parent.id);
+                        if (!updatedParent || !updatedParent.layout || updatedParent.layout.mode === 'free') return;
 
-                            const updatedChildren = updatedParent.children
-                                .map((childId) => updatedShapes.get(childId))
-                                .filter(Boolean) as Shape[];
+                        const updatedChildren = updatedParent.children
+                            .map((childId) => updatedShapes.get(childId))
+                            .filter(Boolean) as Shape[];
 
-                            const newLayoutResult = calculateChildPositions(updatedParent, updatedChildren);
+                        const layoutResult = calculateChildPositions(updatedParent, updatedChildren);
 
-                            // Update all children to their calculated layout positions
-                            const updates = updatedChildren.map((child) => {
-                                const pos = newLayoutResult.positions.get(child.id);
-                                return {
-                                    id: child.id,
-                                    changes: {
-                                        x: pos?.x ?? child.x,
-                                        y: pos?.y ?? child.y,
-                                    },
-                                };
-                            });
-
-                            if (updates.length > 0) {
-                                batchUpdate(updates);
-                            }
+                        // Update all children to their calculated layout positions
+                        const updates = updatedChildren.map((child) => {
+                            const pos = layoutResult.positions.get(child.id);
+                            return {
+                                id: child.id,
+                                changes: {
+                                    x: pos?.x ?? child.x,
+                                    y: pos?.y ?? child.y,
+                                },
+                            };
                         });
+
+                        if (updates.length > 0) {
+                            batchUpdate(updates);
+                        }
+                    };
+
+                    // If we reordered, wait for next frame for the store to update, otherwise apply immediately
+                    if (targetIndex !== -1 && targetIndex !== currentIndex) {
+                        requestAnimationFrame(applyLayoutPositions);
+                    } else {
+                        applyLayoutPositions();
                     }
                 }
             }
